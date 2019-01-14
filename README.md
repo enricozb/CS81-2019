@@ -8,20 +8,13 @@
 - [Airtight](https://github.com/alehander42/Airtight)
   - A potentially useful toy language. Python 3 with hindley-milner.
 
-
 ### Ideology
-We want a lot of interfaces so "duck typing" is as feasible as possible
-while still being type safe.
-
-### Four Fundamental Declarations of Kinds
-- Enums
-  - Like Rust's enums
-- Classes
-  - Like Python's classes
-- Traits
-  - Like Haskell's typeclasses
-- Functions
+We want it to write as closely to Python as possible. Something close to
+"duck typing", no massive care for memory, and type safety. Type inference
+is important but 100% inference is useless. Function signatures should be
+explicitly typed. Swift has a very good amount of inference, and this
+language should aspire to that amount of inference.
 
 ### More Details
-See [wiki](https://)
+See [wiki](https://github.com/enricozb/CS81-2019/wiki).
 
