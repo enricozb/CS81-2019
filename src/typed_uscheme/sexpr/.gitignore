@@ -1,0 +1,34 @@
+*.annot
+*.cmo
+*.cma
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+
+# Generated file.
+lexer.ml
+
+# ocamlbuild working directory
+_build/
+
+# ocamlbuild targets
+*.byte
+*.native
+
+# macOS
+.DS_Store
+
+# Executables.
+src/imp/imp
+src/nano_ml/nano_ml
+src/uscheme/uscheme
+src/uscheme_plus/uscheme
+src/typed_imp/imp
+src/typed_uscheme/uscheme
+src/sexpr/sexpr
+src/sexpr/*_test
+src/nano_ml/nano_ml
+src/uml/uml

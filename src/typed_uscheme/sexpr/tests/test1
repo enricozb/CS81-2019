@@ -1,0 +1,21 @@
+1 2 3 4 5 -43
+(this is a test)
+[this is a test of square brackets]
+(this form (has (many (nested (parens)))))
+[this form [has [many [nested [brackets]]]]]
+[this form (has [many (nested [parens or brackets])])]
+
+(define (fact x)
+  (if [= x 0]
+      1
+      [* x (fact [- x 1])]))
+
+;; Quote tests.
+'a
+'foo
+'b
+'c
+'(a b c)
+'(foo bar baz)
+'(a b c d e)
+'(a b (c d) (e))

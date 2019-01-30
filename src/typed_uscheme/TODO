@@ -1,0 +1,19 @@
+TODO for typed uScheme
+======================
+
+Major change: `define` syntax has to be redone to correspond to Ramsey's syntax.
+Need `val` and `val-rec` forms.  Even the abstract syntax needs to be fixed.
+
+Change `scheme_type` to `type_expr` or something non-language-specific.
+
+Check for keywords and reserved ids.  Partially implemented.
+
+Make built-in type names and type constructor names into reserved ids.
+
+Add main.ml.  Fix run_tests.py.  Allow command-line arguments.
+
+Fix environments.
+
+Add "val" form.  Fix syntax.
+
+Get rid of "Narrow".  What should it be?  ApplyType?

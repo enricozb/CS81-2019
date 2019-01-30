@@ -1,0 +1,21 @@
+;
+; Typechecking and evaluation of let forms.
+;
+
+(define int test-val 0)
+
+; Let expressions.
+(check-type (let () 1) int)
+(check-type (let ((x 1)) x) int)
+(check-expect (let () 1) 1)
+(check-expect (let ((x 1)) x) 1)
+(check-type-error (let ((x 1) (y x)) y))
+(check-type-error (+ (let ((x (begin))) x) 1))
+(check-type (let ((test-val #t)) test-val) bool)
+
+; Let* expressions.
+(check-type (let* () 1) int)
+(check-expect (let* () 1) 1)
+(check-expect (let* ((x 1) (y x)) y) 1)
+(check-type-error (let* ((x (begin)) (y (+ x x))) 1))
+(check-type (let ((test-val #t)) test-val) bool)

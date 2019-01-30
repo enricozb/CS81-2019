@@ -1,0 +1,34 @@
+;
+; A smoke test: define a "map" function.
+;
+
+(define int x 10)
+
+(define (int (list int) -> (list int)) int-cons (@ cons int))
+(define (list int) int-null (@ nil int))
+
+(define (list int) test-list
+  (int-cons 1 (int-cons 2 (int-cons 3 int-null))))
+
+(define (list int) test-list-result
+  (int-cons 2 (int-cons 3 (int-cons 4 int-null))))
+
+(define int (incr (x : int)) (+ x 1))
+
+(define
+  (forall ('a 'b) (('a -> 'b) (list 'a) -> (list 'b)))
+  map
+  (type-lambda
+    ('a 'b)
+    (lambda
+      ((f : ('a -> 'b)) (l : (list 'a)))
+      (if ((@ null? 'a) l)
+        (@ nil 'b)
+        ((@ cons 'b)
+           (f ((@ car 'a) l))
+           ((@ map 'a 'b) f ((@ cdr 'a) l)))))))
+
+(define ((int -> int) (list int) -> (list int)) int-map
+  (@ map int int))
+
+(check-expect test-list-result (int-map incr test-list))
