@@ -24,6 +24,10 @@ val bind_type : env -> string -> Syntax.scheme_type -> env
 
 val typecheck_expr :
   env -> Syntax.expr -> Syntax.scheme_type
+val typecheck_val :
+  env -> Loc.loc -> string -> Syntax.expr -> Syntax.scheme_type * env
+val typecheck_valrec :
+  env -> Loc.loc -> string -> Syntax.scheme_type -> Syntax.expr -> env
 val typecheck_define :
   env -> Loc.loc -> string -> Syntax.scheme_type -> Syntax.formal list -> Syntax.expr -> env
 

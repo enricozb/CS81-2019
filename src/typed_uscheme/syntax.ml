@@ -230,9 +230,11 @@ and parse_type = function
 let parse_def = function
   | List (l, [Id (_, "val"); Id (_, name); init]) ->
     Val (l, name, parse_expr init)
+  | List (l, Id (_, "val") :: _) -> error l "invalid \"val\""
 
   | List (l, [Id (_, "val-rec"); ty; Id (_, name); init]) ->
     Valrec (l, name, parse_type ty, parse_expr init)
+  | List (l, Id (_, "val-rec") :: _) -> error l "invalid \"val-rec\""
 
   | List (l, [Id (_, "define"); ty; Id (_, name); List (_, args); body]) ->
     let formals = List.map parse_formal args in

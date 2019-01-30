@@ -303,3 +303,16 @@ let typecheck_define env l name retty formals expr =
   end;
   env'
 
+let typecheck_val env l name expr =
+  let expr_ty = typecheck_expr env expr in
+  let env' = bind_type env name expr_ty in
+  (expr_ty, env')
+
+let typecheck_valrec env l name ty expr =
+  let env' = bind_type env name ty in
+  let expr_ty = typecheck_expr env' expr in
+  if not (ty =|= expr_ty) then begin
+    Error.type_err l ~expected:(string_of_type ty) ~found:(string_of_type expr_ty)
+  end;
+  env'
+

@@ -167,6 +167,22 @@ let rec eval_def env def =
           ({env with type_env}, DefineResult (name, v, functype))
         end
 
+    | Val (l, name, e) ->
+      let (ty, type_env) = Type.typecheck_val env.type_env l name e in
+      let v = eval_expr env.val_env e in
+        begin
+          define env.val_env name v;
+          ({env with type_env}, DefineResult (name, v, ty))
+        end
+
+    | Valrec (l, name, ty, e) ->
+      let type_env = Type.typecheck_valrec env.type_env l name ty e in
+      let v = eval_expr env.val_env e in
+        begin
+          define env.val_env name v;
+          ({env with type_env}, DefineResult (name, v, ty))
+        end
+
     | Expr (_, e) ->
       let ty = Type.typecheck_expr env.type_env e in
       let v = eval_expr env.val_env e in
