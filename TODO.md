@@ -6,4 +6,5 @@
 
 ## TODO
 - Add proper lists (not pairs).
+- Write lexer/parser for custom concrete syntax
 
