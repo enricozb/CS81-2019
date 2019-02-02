@@ -55,6 +55,7 @@ let safe_div a b =
 let basis_vals = make_env
     [("#t", BoolVal true);
      ("#f", BoolVal false);
+     ("#u", UnitVal);
      ("nil", NilVal);
      ("+", binary_int_int_fun (+));
      ("*", binary_int_int_fun ( * ));
@@ -72,6 +73,7 @@ let basis_vals = make_env
 
 let bool_ty = Type.bool_ty
 let int_ty  = Type.int_ty
+let unit_ty = Type.unit_ty
 let list_of t = Syntax.TyApp (Syntax.TyCon "list", [t])
 
 let binary_int_int_sig = Syntax.FunctionType ([int_ty; int_ty], int_ty)
@@ -100,6 +102,7 @@ let basis_types = Type.make_env
     (* (Gamma) Type environment *)
     [("#t", bool_ty);
      ("#f", bool_ty);
+     ("#u", unit_ty);
      ("nil", forall (list_of @@ Syntax.TyVar "a"));
      ("+", binary_int_int_sig);
      ("*", binary_int_int_sig);
