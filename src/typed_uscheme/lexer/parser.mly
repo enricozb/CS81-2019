@@ -1,19 +1,40 @@
- /* File parser.mly */
-%token <string> TYPE
-%token <string> IDENTIFIER
-%token <int> NUMBER
-%token IF
-%token DEF
-%token COLON
-%token EQUALS MAPSTO
-%token COMMA
-%token LANGLE RANGLE
-%token LBRACE RBRACE
-%token LPAREN RPAREN
-%token LBRACK RBRACK
-%token <string> OPERATOR
-%token INDENT DEDENT NEWLINE
-%token <int> DEINDENT
+%{
+  let loc_of_token = function
+    | TYPE (l, _)
+    | NAME (l, _)
+    | NUMBER (l, _)
+    | IF l
+    | DEF l
+    | COLON l
+    | EQUALS l
+    | MAPSTO l
+    | COMMA l
+    | LANGLE l | RANGLE l
+    | LBRACE l | RBRACE l
+    | LPAREN l | RPAREN l
+    | LBRACK l | RBRACK l
+    | OPERATOR (l, _)
+    | INDENT l | DEDENT l | NEWLINE l
+    | DEINDENT (l, _)
+      -> l
+    | EOF -> failwith "EOF has no `loc`"
+%}
+
+%token <Loc.loc * string> TYPE
+%token <Loc.loc * string> NAME
+%token <Loc.loc * int> NUMBER
+%token <Loc.loc> IF
+%token <Loc.loc> DEF
+%token <Loc.loc> COLON
+%token <Loc.loc> EQUALS MAPSTO
+%token <Loc.loc> COMMA
+%token <Loc.loc> LANGLE RANGLE
+%token <Loc.loc> LBRACE RBRACE
+%token <Loc.loc> LPAREN RPAREN
+%token <Loc.loc> LBRACK RBRACK
+%token <Loc.loc * string> OPERATOR
+%token <Loc.loc> INDENT DEDENT NEWLINE
+%token <Loc.loc * int> DEINDENT
 %token EOF
 %start main             /* the entry point */
 %type <Ast.ast> main
@@ -32,36 +53,28 @@ simple_stmt:
   | assign_stmt NEWLINE     { $1 }
 
 assign_stmt:
-  | NAME EQUALS expr        { Ast.Bind ($1, $3) }
+  | NAME EQUALS expr {
+    Ast.Bind (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
+  }
 
 compound_stmt:
-  (* | if_stmt                 { $1 } *)
   | funcdef                 { $1 }
-
-(*
-if_stmt:
-  | IF expr COLON suite     { Ast.If ($2, $4) }
-  *)
 
 funcdef:
   | DEF NAME generic_list typed_namelist MAPSTO TYPE COLON suite {
-    Ast.Def ($2, $4, $6, $8)
+    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8), snd $2, snd $4, snd $6, $8)
   }
 
 generic_list:
   | LANGLE TYPE RANGLE       { [$2] }
 
-namelist:
-  | NAME                     { [$1] }
-  | NAME COMMA namelist      { $1 :: $3 }
-
 typed_namelist:
-  | LPAREN RPAREN                        { [] }
-  | LPAREN typed_namelist_inner RPAREN   { $2 }
+  | LPAREN RPAREN                        { (Loc.span $1 $2, []) }
+  | LPAREN typed_namelist_inner RPAREN   { (Loc.span $1 $3, $2) }
 
 typed_namelist_inner:
-  | NAME COLON TYPE                            { [($1, $3)] }
-  | NAME COLON TYPE COMMA typed_namelist_inner { ($1, $3) :: $5 }
+  | NAME COLON TYPE                            { [(snd $1, snd $3)] }
+  | NAME COLON TYPE COMMA typed_namelist_inner { (snd $1, snd $3) :: $5 }
 
 suite:
   | simple_stmt             { [$1] }
@@ -73,19 +86,30 @@ stmt_list:
 
 expr:
   | literal                 { $1 }
-  | NAME                    { Ast.Name $1 }
+  | NAME                    { Ast.Name (fst $1, snd $1) }
   | lambda                  { $1 }
   | call                    { $1 }
   | LPAREN expr RPAREN      { $2 }
+  | operator_list           { $1 }
 
 literal:
-  | NUMBER       { Ast.Num $1 }
+  | NUMBER       { Ast.Num (fst $1, snd $1) }
 
 lambda:
-  | typed_namelist MAPSTO expr { Ast.Lambda ($1, $3) }
+  | typed_namelist MAPSTO expr {
+    Ast.Lambda (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
+  }
 
 call:
-  | NAME LPAREN expr_list_inner RPAREN { Ast.Call ($1, $3) }
+  | NAME LPAREN expr_list_inner RPAREN {
+    Ast.Call (Loc.span (fst $1) $4, snd $1, $3)
+  }
+
+operator_list:
+  | expr OPERATOR expr      {
+    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
+              snd $2, [$1; $3])
+  }
 
 expr_list_inner:
   | { [] }
