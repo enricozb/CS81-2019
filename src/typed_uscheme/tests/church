@@ -6,14 +6,13 @@
 ; as "church". It is simply the type of Church numerals. If we had
 ; type aliases, everything below would be much more readable.
 
-(define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        zero
-        (type-lambda
-          ('a)
-          (lambda ((s : ('a -> 'a))) (lambda ((z : 'a)) z))))
+(val zero
+  (type-lambda
+    ('a)
+    (lambda ((s : ('a -> 'a))) (lambda ((z : 'a)) z))))
 
 (define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        (succ (x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))))
+        succ ([x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))])
         (type-lambda
           ('a)
           (lambda ((s : ('a -> 'a)))
@@ -21,20 +20,20 @@
 
 
 (define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        (church-of-int (x : int))
+        church-of-int ([x : int])
         (if (= x 0)
           zero
           (succ (church-of-int (- x 1)))))
 
-(define int (incr (x : int)) (+ x 1))
+(define int incr ([x : int]) (+ x 1))
 
 (define int
-        (int-of-church (x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))))
+        int-of-church ([x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))])
         (((@ x int) incr) 0))
 
 ; Check that our basic conversions to and from ints work.
 (define int
-        (id-via-church (x : int))
+        id-via-church ([x : int])
         (int-of-church (church-of-int x)))
 
 (check-expect 0 (id-via-church 0))
@@ -43,16 +42,16 @@
 
 ; Now, some operations on church integers.
 
-(define (forall ('a) (('a -> 'a) -> ('a -> 'a))) one (church-of-int 1))
-(define (forall ('a) (('a -> 'a) -> ('a -> 'a))) two (church-of-int 2))
+(val one (church-of-int 1))
+(val two (church-of-int 2))
 
 (check-expect 0 (int-of-church (+-church zero zero)))
 (check-expect 2 (int-of-church (+-church zero two)))
 (check-expect 3 (int-of-church (+-church one two)))
 ; x + y is achieved by replacing x's zero with y.
 (define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        (+-church (x : (forall ('a) (('a -> 'a) -> ('a -> 'a))))
-                  (y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))))
+        +-church ([x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))]
+                  [y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))])
         (type-lambda ('a)
                      (lambda ((s : ('a -> 'a)))
                        (lambda ((z : 'a))
@@ -65,8 +64,8 @@
 (check-expect 2 (int-of-church (*-church one two)))
 (check-expect 4 (int-of-church (*-church two two)))
 (define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        (*-church (x : (forall ('a) (('a -> 'a) -> ('a -> 'a))))
-                  (y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))))
+        *-church ([x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))]
+                  [y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))])
         (type-lambda ('a)
                      (lambda ((s : ('a -> 'a)))
                          ((@ x 'a) ((@ y 'a) s)))))
@@ -78,6 +77,7 @@
 (check-expect 4 (int-of-church (^-church two two)))
 ; x ^ y is achieved by magic.
 (define (forall ('a) (('a -> 'a) -> ('a -> 'a)))
-        (^-church (x : (forall ('a) (('a -> 'a) -> ('a -> 'a))))
-                  (y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))))
+        ^-church ([x : (forall ('a) (('a -> 'a) -> ('a -> 'a)))]
+                  [y : (forall ('a) (('a -> 'a) -> ('a -> 'a)))])
         (type-lambda ('a) ((@ y ('a -> 'a)) (@ x 'a))))
+

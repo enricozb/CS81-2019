@@ -2,7 +2,7 @@
 ; Setting variables.
 ;
 
-(define int test-val 0)
+(val test-val 0)
 (set test-val 1)
 
 (check-type (set test-val 1) unit)

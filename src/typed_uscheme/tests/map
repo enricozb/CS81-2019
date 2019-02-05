@@ -2,20 +2,20 @@
 ; A smoke test: define a "map" function.
 ;
 
-(define int x 10)
+(val x 10)
 
-(define (int (list int) -> (list int)) int-cons (@ cons int))
-(define (list int) int-null (@ nil int))
+(val int-cons (@ cons int))
+(val int-null (@ nil int))
 
-(define (list int) test-list
+(val test-list
   (int-cons 1 (int-cons 2 (int-cons 3 int-null))))
 
-(define (list int) test-list-result
+(val test-list-result
   (int-cons 2 (int-cons 3 (int-cons 4 int-null))))
 
-(define int (incr (x : int)) (+ x 1))
+(define int incr ([x : int]) (+ x 1))
 
-(define
+(val-rec
   (forall ('a 'b) (('a -> 'b) (list 'a) -> (list 'b)))
   map
   (type-lambda
@@ -28,7 +28,6 @@
            (f ((@ car 'a) l))
            ((@ map 'a 'b) f ((@ cdr 'a) l)))))))
 
-(define ((int -> int) (list int) -> (list int)) int-map
-  (@ map int int))
+(val int-map (@ map int int))
 
 (check-expect test-list-result (int-map incr test-list))

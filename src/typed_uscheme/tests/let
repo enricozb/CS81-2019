@@ -2,7 +2,7 @@
 ; Typechecking and evaluation of let forms.
 ;
 
-(define int test-val 0)
+(val test-val 0)
 
 ; Let expressions.
 (check-type (let () 1) int)

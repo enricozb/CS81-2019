@@ -2,7 +2,7 @@
 ; Check that the type system does not allow ill-kinded types.
 ;
 
-(define unit unit (begin))
+(val unit (begin))
 
 (check-type-error (@ int))
 (check-type-error (@ int unit))

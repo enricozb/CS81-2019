@@ -2,10 +2,10 @@
 ; Test "begin" expressions.
 ;
 
-(define unit unit (while #f 0))
+(val unit (while #f 0))
 
 (check-type (begin) unit)
-(check-expect (begin) unit)
+(check-expect (begin) #u)
 (check-type (begin 1) int)
 (check-expect (begin 1) 1)
 (check-type (begin unit 1) int)

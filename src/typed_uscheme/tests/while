@@ -4,11 +4,11 @@
 
 (check-type (while #f 0) unit)
 
-(define int test-val 1)
+(val test-val 1)
 (while (< test-val 10) (set test-val (* test-val 2)))
 (check-expect test-val 16)
 
-(define int other-test-val 0)
+(val other-test-val 0)
 (while (> other-test-val 0) (set other-test-val 10))
 (check-expect other-test-val 0)
 

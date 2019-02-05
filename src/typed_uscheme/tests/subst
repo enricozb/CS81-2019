@@ -1,9 +1,9 @@
 ; Tests of type variable renaming.
 
-(define unit unit (while #f 0))
+(val unit (while #f 0))
 
 ; A DIY value of any type.
-(define (forall ('a) (unit -> 'a)) undefined
+(val undefined
   (type-lambda ('a)
     (lambda ((_ : unit))
             ((@ car 'a) (@ nil 'a)))))
@@ -11,7 +11,7 @@
 ; Some simple tests to ensure type variables' names don't matter.
 ; First, if this function typechecks, type substitition is doing
 ; something right.
-(define (forall ('a 'b) ('a -> 'b)) test-naming
+(val-rec (forall ('a 'b) ('a -> 'b)) test-naming
   (type-lambda ('c 'd)
     (lambda ((_ : 'c))
       ((@ undefined 'd) unit))))
@@ -21,7 +21,7 @@
 (check-type test-naming (forall ('e 'f) ('e -> 'f)))
 
 ; Now, check that captures are avoided.
-(define (forall ('a) ('a -> (forall ('a) 'a))) test-capture
+(val-rec (forall ('a) ('a -> (forall ('a) 'a))) test-capture
   ; Change the name of the type variable to make it less likely that bugs will
   ; slip by.
   (type-lambda ('b)
