@@ -23,84 +23,84 @@ type unit_test =
 (* The recursive expression evaluator. *)
 let rec eval_expr env expr =
   match expr with
-    | Literal (_, i) -> IntVal i
+  | Literal (_, i) -> IntVal i
 
-    | Var (l, s) ->
+  | Var (l, s) ->
+    begin
+      match lookup l env s with
+      | Unspecified s -> Error.name_err l s
+      | other -> other
+    end
+
+  | Set (l, s, e) ->
+    begin
+      set l env s (eval_expr env e);
+      UnitVal
+    end
+
+  | If (l, cond, t, e) ->
+    if truthy l (eval_expr env cond) then
+      eval_expr env t
+    else
+      eval_expr env e
+
+  | While (l, cond, body) ->
+    if truthy l (eval_expr env cond) then
       begin
-        match lookup l env s with
-          | Unspecified s -> Error.name_err l s
-          | other -> other
+        ignore (eval_expr env body);
+        eval_expr env expr
+      end
+    else
+      UnitVal
+
+  | Begin (_, []) -> UnitVal
+  | Begin (_, [x]) -> eval_expr env x
+  | Begin (l, x :: xs) ->
+    begin
+      ignore (eval_expr env x);
+      eval_expr env (Begin (l, xs))
+    end
+
+  | Let (_, bindings, body) ->
+    (* First evaluate *all* bindings in the outer environment. *)
+    let bindings =
+      List.map
+        (fun (name, expr) -> (name, eval_expr env expr))
+        bindings
+    in
+    let env' = bind_all env bindings in
+      eval_expr env' body
+
+  | LetStar (_, bindings, body) ->
+    let folder env (name, expr) =
+      bind_local env name (eval_expr env expr)
+    in
+    let env' = List.fold_left folder env bindings in
+      eval_expr env' body
+
+  | Lambda (_, formals, body) ->
+    UserFuncVal (List.map fst formals, body, env)
+
+  | Call (l, func, args) ->
+    let actuals = List.map (eval_expr env) args in
+      begin
+        match eval_expr env func with
+        | PrimFuncVal f -> f actuals l
+        | UserFuncVal (formals, body, closure) ->
+          if List.length formals <> List.length actuals then
+            Error.call_err l
+              ~expected:(List.length formals)
+              ~found:(List.length actuals)
+          else
+            let closure = bind_all closure (List.combine formals actuals) in
+              eval_expr closure body
+        | other -> Error.type_err l
+                     ~expected:"function"
+                     ~found:(string_of_val other)
       end
 
-    | Set (l, s, e) ->
-      begin
-        set l env s (eval_expr env e);
-        UnitVal
-      end
-
-    | If (l, cond, t, e) ->
-      if truthy l (eval_expr env cond) then
-        eval_expr env t
-      else
-        eval_expr env e
-
-    | While (l, cond, body) ->
-      if truthy l (eval_expr env cond) then
-        begin
-          ignore (eval_expr env body);
-          eval_expr env expr
-        end
-      else
-        UnitVal
-
-    | Begin (_, []) -> UnitVal
-    | Begin (_, [x]) -> eval_expr env x
-    | Begin (l, x :: xs) ->
-      begin
-        ignore (eval_expr env x);
-        eval_expr env (Begin (l, xs))
-      end
-
-    | Let (_, bindings, body) ->
-      (* First evaluate *all* bindings in the outer environment. *)
-      let bindings =
-        List.map
-          (fun (name, expr) -> (name, eval_expr env expr))
-          bindings
-      in
-      let env' = bind_all env bindings in
-        eval_expr env' body
-
-    | LetStar (_, bindings, body) ->
-      let folder env (name, expr) =
-        bind_local env name (eval_expr env expr)
-      in
-      let env' = List.fold_left folder env bindings in
-        eval_expr env' body
-
-    | Lambda (_, formals, body) ->
-      UserFuncVal (List.map fst formals, body, env)
-
-    | Call (l, func, args) ->
-      let actuals = List.map (eval_expr env) args in
-        begin
-          match eval_expr env func with
-            | PrimFuncVal f -> f actuals l
-            | UserFuncVal (formals, body, closure) ->
-              if List.length formals <> List.length actuals then
-                Error.call_err l
-                  ~expected:(List.length formals)
-                  ~found:(List.length actuals)
-              else
-                let closure = bind_all closure (List.combine formals actuals) in
-                  eval_expr closure body
-            | other -> Error.type_err l
-                         ~expected:"function"
-                         ~found:(string_of_val other)
-        end
-
-    | Narrow (_, e, tys) -> eval_expr env e
-    | TypeLambda (_, tyvars, e) -> eval_expr env e
+  | Narrow (_, e, tys) -> eval_expr env e
+  | TypeLambda (_, tyvars, e) -> eval_expr env e
 
 (* The environment type to use for top-level typechecking and evaluation: a
  * value environment and a type environment. *)

@@ -45,13 +45,20 @@ let truthy l = function
   (* This is actually R5RS. *)
   | _ -> true
 
-let lookup l env name = try !(StringMap.find name env.locals)
-  with Not_found -> try Hashtbl.find env.globals name
-    with Not_found -> Error.name_err l name
+let lookup l env name =
+  try
+    !(StringMap.find name env.locals)
+  with Not_found ->
+    try
+      Hashtbl.find env.globals name
+    with Not_found ->
+      Error.name_err l name
 
 let set l env name v =
-  try StringMap.find name env.locals := v
-  with Not_found -> if Hashtbl.mem env.globals name then
+  try
+    StringMap.find name env.locals := v
+  with Not_found ->
+    if Hashtbl.mem env.globals name then
       Hashtbl.replace env.globals name v
     else
       Error.name_err l name
@@ -59,15 +66,14 @@ let set l env name v =
 let define env name v = Hashtbl.replace env.globals name v
 
 let bind_local env name v =
-  {env with locals=StringMap.add name (ref v) env.locals}
+  {env with locals = StringMap.add name (ref v) env.locals}
 
 let hashtbl_of_alist alist buckets =
   let tbl = Hashtbl.create buckets in
-  List.iter (fun (k, v) -> Hashtbl.replace tbl k v) alist;
-  tbl
+    List.iter (fun (k, v) -> Hashtbl.replace tbl k v) alist;
+    tbl
 
 let make_env alist =
-  {
-    locals = StringMap.empty;
-    globals = hashtbl_of_alist alist 1024
-  }
+  { locals = StringMap.empty;
+    globals = hashtbl_of_alist alist 1024 }
+
