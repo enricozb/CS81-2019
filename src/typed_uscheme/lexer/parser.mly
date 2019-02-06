@@ -46,7 +46,7 @@ main:
 
 stmt:
   | simple_stmt             { $1 }
-  | compound_stmt           { $1 }
+  | compound_stmt NEWLINE   { $1 }
 
 simple_stmt:
   | expr NEWLINE            { $1 }

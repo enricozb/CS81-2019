@@ -38,10 +38,10 @@ and string_of_ast = function
   | Num (_, i) -> string_of_int i
   | Call (_, name, params) -> name ^ "(" ^ (string_of_ast_list params ",") ^ ")"
   | Lambda (_, typed_params, stmt) ->
-      "(" ^ string_of_typed_namelist typed_params "," ^ ") -> " ^ string_of_ast stmt
+      "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
   | Def (_, funcname, typed_params, rtype, stmts) ->
       "def " ^ funcname ^
-        "(" ^ string_of_typed_namelist typed_params "," ^ "): ..."
+        "(" ^ string_of_typed_namelist typed_params ", " ^ "): ..."
   | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
 
 let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
