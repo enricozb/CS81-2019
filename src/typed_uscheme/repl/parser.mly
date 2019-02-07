@@ -62,11 +62,21 @@ compound_stmt:
 
 funcdef:
   | DEF NAME generic_list typed_namelist MAPSTO TYPE COLON suite {
-    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8), snd $2, snd $4, snd $6, $8)
+    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8),
+             snd $2,
+                 $3,
+             snd $4,
+             snd $6,
+             $8)
   }
 
 generic_list:
-  | LANGLE TYPE RANGLE       { [$2] }
+  | LANGLE RANGLE                        { [] }
+  | LANGLE generic_list_inner RANGLE     { $2 }
+
+generic_list_inner:
+  | TYPE                                 { [snd $1] }
+  | TYPE COMMA generic_list_inner        { snd $1 :: $3 }
 
 typed_namelist:
   | LPAREN RPAREN                        { (Loc.span $1 $2, []) }

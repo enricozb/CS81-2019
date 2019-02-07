@@ -4,13 +4,13 @@ open Parser
 module I =
   Parser.MenhirInterpreter
 
-let replicate n el =
+let replicate (n : int) (el : 'a) =
   let rec iter curr = function
     | 0 -> curr
     | n -> iter (el :: curr) (n - 1)
   in iter [] n
 
-let lexfun_cache filename =
+let lexfun_cache (filename : string) =
   let cache = ref [] in
   fun lexbuf ->
     match !cache with
@@ -25,6 +25,7 @@ let lexfun_cache filename =
               cache := (replicate (n - 1) (DEDENT loc)); (DEDENT loc)
           | token -> token
 
+(* Prints tokens as they are produced *)
 let print_wrap lexfun =
   fun lexbuf ->
     let token = lexfun lexbuf in
@@ -33,10 +34,15 @@ let print_wrap lexfun =
 
 (* Taken from https://gitlab.inria.fr/fpottier/menhir/blob/master/demos/calc-incremental/calc.ml *)
 exception ParseIncomplete
+exception SyntaxError of int
 
-let rec loop lexer_rule lexbuf (checkpoint : Ast.ast I.checkpoint) =
+let rec loop
+        lexer_rule
+        lexbuf
+        (checkpoint : Ast.ast I.checkpoint) =
   match checkpoint with
   | I.InputNeeded _env ->
+      (* TODO super weird use of EOF token... *)
       let token = lexer_rule lexbuf in
       begin
         match token with
@@ -52,11 +58,9 @@ let rec loop lexer_rule lexbuf (checkpoint : Ast.ast I.checkpoint) =
       let checkpoint = I.resume checkpoint in
       loop lexer_rule lexbuf checkpoint
   | I.HandlingError _env ->
-      Printf.fprintf stderr
-        "At offset %d: syntax error.\n%!"
-        (Lexing.lexeme_start lexbuf)
+      raise (SyntaxError (Lexing.lexeme_start lexbuf))
   | I.Accepted ast ->
-    Printf.printf "%s\n" (Ast.string_of_ast ast)
+      ast
   | I.Rejected ->
       (* The parser rejects this input. This cannot happen, here, because
          we stop as soon as the parser reports [HandlingError]. *)
@@ -64,37 +68,39 @@ let rec loop lexer_rule lexbuf (checkpoint : Ast.ast I.checkpoint) =
 
 let print_prompt str =
   Printf.printf "%s" str;
-  flush stdout;
-  ()
+  flush stdout
 
-let readline () =
+let read_line_with_prompt (prompt : string) =
+  print_prompt prompt;
   (read_line ()) ^ "\n"
 
-let parse filename =
+(* TODO use `filename` usefully. Right now this always parses from stdin *)
+let parse (filename : string) =
   let rec loop_until_parse str =
     let lexbuf = Lexing.from_string str in
       try
-        loop (lexfun_cache filename) lexbuf (Parser.Incremental.main lexbuf.lex_curr_p)
+        loop
+          (lexfun_cache filename)
+          lexbuf
+          (Parser.Incremental.main lexbuf.lex_curr_p)
       with ParseIncomplete -> begin
-            print_prompt "... ";
-            loop_until_parse (str ^ (readline ()))
-          end
+        loop_until_parse (str ^ (read_line_with_prompt "... "))
+      end
   in begin
-    print_prompt ">>> ";
-    loop_until_parse (readline ())
+    loop_until_parse (read_line_with_prompt ">>> ")
   end
 
-let _ =
-  let filename = "__main__" in
+(* takes in a function that takes in the Ast read in and any auxilliary
+ * data. Feeds in `aux` into f repeatedly after each parsing. *)
+let repl (f : Ast.ast -> 'a -> 'a) (aux : 'a) =
 	try
-    let rec iter _ =
-      parse filename;
-      iter ()
-    in iter ()
-    with
-    | Lexer.Eof ->
-        exit 0
-    | Lexer.SyntaxError msg ->
-        Printf.fprintf stderr "%s\n" msg
-
+    let aux = ref aux in
+    while true do
+      aux := f (parse "__main__") (!aux)
+    done
+  with
+  | Lexer.SyntaxError msg ->
+      Printf.fprintf stderr "%s\n" msg
+  | End_of_file ->
+      exit 0
 

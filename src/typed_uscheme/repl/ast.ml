@@ -10,7 +10,7 @@ type ast =
   | Lambda of (loc * typed_namelist * ast)
   | Call of (loc * name * (ast list))
   | Bind of (loc * name * ast)
-  | Def of (loc * name * (typed_namelist) * name * (ast list))
+  | Def of (loc * name * (ty list) * (typed_namelist) * ty * (ast list))
 
 let rec string_of_str_list lst sep =
   let rec iter = function
@@ -39,7 +39,7 @@ and string_of_ast = function
   | Call (_, name, params) -> name ^ "(" ^ (string_of_ast_list params ",") ^ ")"
   | Lambda (_, typed_params, stmt) ->
       "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
-  | Def (_, funcname, typed_params, rtype, stmts) ->
+  | Def (_, funcname, type_vars, typed_params, rtype, stmts) ->
       "def " ^ funcname ^
         "(" ^ string_of_typed_namelist typed_params ", " ^ "): ..."
   | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
@@ -51,7 +51,7 @@ let loc_of_ast = function
   | Num (l, _)
   | Call (l, _, _)
   | Lambda (l, _, _)
-  | Def (l, _, _, _, _)
+  | Def (l, _, _, _, _, _)
   | Bind (l, _, _)
     -> l
 

@@ -69,7 +69,7 @@
       with Exit -> `Token (DEINDENT (loc, !dedent_count))
 }
 
-let operators = ['.' '+' '-' '*' '/' '%' '<' '>' '=']
+let operators = ['.' '+' '-' '*' '/' '%' '<' '>' '=' '^']
 
 rule token filename = parse
   | ['\n'] {
