@@ -192,6 +192,8 @@ let rec eval_def env def =
         end
 
     | Use (l, filename) ->
+      failwith "Use not implemented"
+      (*
       (* Read in and parse the file. *)
       let channel = try
           open_in filename
@@ -205,6 +207,7 @@ let rec eval_def env def =
             count_passed count_tests;
           (env, UseResult filename)
         end
+        *)
     | CheckExpect _
     | CheckError _
     | CheckType _
@@ -239,6 +242,7 @@ and eval_def_in_use env tests def =
  *
  * Returns (num_tests_passed, num_total_tests).
  *)
+(* TODO add use
 and use_lexbuf lexbuf filename env =
   (* Parse the file. *)
   let sexprs = Parser.parse_many filename lexbuf in
@@ -262,26 +266,26 @@ and use_lexbuf lexbuf filename env =
    * run the tests in the order of definition. *)
   let count_passed = List.fold_right test_folder unit_tests 0 in
   (env, count_passed, List.length unit_tests)
+  *)
 
 (* The REPL, in the form expected by Repl. *)
-let rec repl_func env = function
-  | [] -> env
-  | x :: xs -> try
-      let def = parse_def x in
-
-      let (env, result) = eval_def env def in
-      begin match result with
-        | UseResult fname -> Printf.printf "used file: %s\n" fname
-        | ValueResult (v, ty) ->
-          if not (ty =|= Type.unit_ty) then
-            Printf.printf "%s : %s\n" (string_of_val v) (Type.string_of_type ty)
-        | DefineResult (name, v, ty) ->
-          Printf.printf "%s : %s = %s\n"
-            name (Type.string_of_type ty) (string_of_val v)
-      end;
-      env
-    with Error.UScheme_err e -> Error.print_err e;
-      repl_func env xs
+let rec repl_func ast env =
+  let def = ast_to_def ast in
+  try
+    let (env, result) = eval_def env def in
+    begin match result with
+      | UseResult fname -> Printf.printf "used file: %s\n" fname
+      | ValueResult (v, ty) ->
+        if not (ty =|= Type.unit_ty) then
+          Printf.printf "%s : %s\n" (string_of_val v) (Type.string_of_type ty)
+      | DefineResult (name, v, ty) ->
+        Printf.printf "%s : %s = %s\n"
+          name (Type.string_of_type ty) (string_of_val v)
+    end;
+    env
+  with Error.UScheme_err e ->
+    Error.print_err e;
+    env
 
 let () =
   let env =
@@ -290,12 +294,5 @@ let () =
       type_env = Basis.basis_types
     }
   in
-  let basis_buf = Lexing.from_string Basis.scheme_basis in
-    begin
-      ignore (use_lexbuf basis_buf "<initial basis>" env);
-      try
-        ignore (Repl.make_repl repl_func env)
-      with
-        End_of_file -> exit 0
-    end
+  ignore (Repl.repl repl_func env)
 

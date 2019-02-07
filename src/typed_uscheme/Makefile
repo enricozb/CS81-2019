@@ -1,8 +1,8 @@
-NAME = uscheme
-LIBS  = sexpr.cma
-LIBDIR = sexpr
+NAME = myth
+LIBS  = repl.cma
+LIBDIR = repl
 OCAMLC = ocamlfind ocamlc
-INCLUDE_FLAGS = -I $(LIBDIR) $(LIBS)
+INCLUDE_FLAGS = -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
 
 MODULES = error syntax env type basis eval
 CMO = $(addsuffix .cmo, $(MODULES))

@@ -49,11 +49,5 @@ type def =
 
 val loc_of_expr : expr -> loc
 val loc_of_def  : def -> loc
-
-(*
- * Syntax analysis.
- *)
-
-val parse_expr : Sexpr.expr -> expr
-val parse_def  : Sexpr.expr -> def
+val ast_to_def : Ast.ast -> def
 

@@ -16,9 +16,9 @@ let rec string_of_type = function
     let types = con :: args |> List.map string_of_type in
     "(" ^ String.concat " " types ^ ")"
 
-let bool_ty = TyCon "bool"
-let int_ty  = TyCon "int"
-let unit_ty = TyCon "unit"
+let bool_ty = TyCon "Bool"
+let int_ty  = TyCon "Int"
+let unit_ty = TyCon "Unit"
 
 type kind =
   | Type

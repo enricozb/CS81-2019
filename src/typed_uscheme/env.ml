@@ -26,12 +26,12 @@ let rec string_of_val = function
   | UserFuncVal _
   | PrimFuncVal _ -> "<function>"
   | IntVal i -> string_of_int i
-  | BoolVal true -> "#t"
-  | BoolVal false -> "#f"
+  | BoolVal true -> "true"
+  | BoolVal false -> "false"
   | PairVal (a, b) ->
     "'(" ^ string_of_pair a b ^ ")"
   | NilVal -> "nil"
-  | UnitVal -> "#u"
+  | UnitVal -> "unit"
   | Unspecified s -> "<placeholder for " ^ s ^ ">"
 and string_of_pair a =
   let a = string_of_val a in function

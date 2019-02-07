@@ -1,0 +1,18 @@
+
+type state =
+  | RECENT_NEWLINE
+  | CODE
+
+val state : state ref
+
+(* Tokens (TODO) put in parser *)
+
+val string_of_token : Parser.token -> string
+val print_token : Parser.token -> unit
+
+(* Lexing *)
+exception SyntaxError of string
+
+val token : string -> Lexing.lexbuf -> Parser.token
+val newline : string -> Lexing.lexbuf -> Parser.token
+

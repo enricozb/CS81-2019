@@ -69,41 +69,41 @@ let basis_vals = make_env
      ("cons", cons);
      ("car", car);
      ("cdr", cdr);
-     ("null?", is_nil)]
+     ("is_nil", is_nil)]
 
 let bool_ty = Type.bool_ty
 let int_ty  = Type.int_ty
 let unit_ty = Type.unit_ty
-let list_of t = Syntax.TyApp (Syntax.TyCon "list", [t])
+let list_of t = Syntax.TyApp (Syntax.TyCon "List", [t])
 
 let binary_int_int_sig = Syntax.FunctionType ([int_ty; int_ty], int_ty)
 let int_comparison_sig = Syntax.FunctionType ([int_ty; int_ty], bool_ty)
 
 (* Shorthand for "(forall 'a ty)". *)
-let forall ty = Syntax.Forall (["a"], ty)
+let forall ty = Syntax.Forall (["A"], ty)
 
 let cons_sig =
-  let a = Syntax.TyVar "a" in
+  let a = Syntax.TyVar "A" in
   forall @@ Syntax.FunctionType ([a; list_of a], list_of a)
 
 let car_sig =
-  let a = Syntax.TyVar "a" in
+  let a = Syntax.TyVar "A" in
   forall @@ Syntax.FunctionType ([list_of a], a)
 
 let cdr_sig =
-  let a = Syntax.TyVar "a" in
+  let a = Syntax.TyVar "A" in
   forall @@ Syntax.FunctionType ([list_of a], list_of a)
 
 let is_nil_sig =
-  let a = Syntax.TyVar "a" in
+  let a = Syntax.TyVar "A" in
   forall @@ Syntax.FunctionType ([list_of a], bool_ty)
 
 let basis_types = Type.make_env
     (* (Gamma) Type environment *)
-    [("#t", bool_ty);
-     ("#f", bool_ty);
-     ("#u", unit_ty);
-     ("nil", forall (list_of @@ Syntax.TyVar "a"));
+    [("true", bool_ty);
+     ("false", bool_ty);
+     ("unit", unit_ty);
+     ("nil", forall (list_of @@ Syntax.TyVar "A"));
      ("+", binary_int_int_sig);
      ("*", binary_int_int_sig);
      ("/", binary_int_int_sig);
@@ -112,16 +112,15 @@ let basis_types = Type.make_env
      ("<", int_comparison_sig);
      (">=", int_comparison_sig);
      ("<=", int_comparison_sig);
-     ("=", int_comparison_sig);
+     ("==", int_comparison_sig);
      ("cons", cons_sig);
      ("car", car_sig);
      ("cdr", cdr_sig);
-     ("null?", is_nil_sig)]
+     ("is_nil", is_nil_sig)]
 
     (* (Delta) Kind environment *)
-    [("bool", Type.Type);
-     ("int", Type.Type);
-     ("unit", Type.Type);
-     ("list", Type.Arrow ([Type.Type], Type.Type))]
+    [("Bool", Type.Type);
+     ("Int", Type.Type);
+     ("Unit", Type.Type);
+     ("List", Type.Arrow ([Type.Type], Type.Type))]
 
-let scheme_basis = ""
