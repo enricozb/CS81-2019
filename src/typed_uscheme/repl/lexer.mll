@@ -6,7 +6,7 @@
   let state = ref CODE
 
   let string_of_token = function
-    | TYPE (_, t) -> t
+    | TYPESTR (_, t) -> t
     | NAME (_, s) -> s
     | NUMBER (_, i) -> string_of_int i
     | IF _ -> "if"
@@ -81,7 +81,7 @@ rule token filename = parse
   | ':' { COLON (make_loc filename lexbuf) }
   | ',' { COMMA (make_loc filename lexbuf) }
   | ['A'-'Z']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
-    TYPE ((make_loc filename lexbuf), id)
+    TYPESTR ((make_loc filename lexbuf), id)
   }
   | ['a'-'z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
     name (make_loc filename lexbuf) id

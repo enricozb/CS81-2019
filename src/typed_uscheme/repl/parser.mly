@@ -1,6 +1,6 @@
 %{
   let loc_of_token = function
-    | TYPE (l, _)
+    | TYPESTR (l, _)
     | NAME (l, _)
     | NUMBER (l, _)
     | IF l
@@ -20,7 +20,7 @@
     | EOF -> failwith "EOF has no `loc`"
 %}
 
-%token <Loc.loc * string> TYPE
+%token <Loc.loc * string> TYPESTR
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
 %token <Loc.loc> IF
@@ -40,6 +40,7 @@
 %type <Ast.ast> main
 
 %%
+
 main:
   | NEWLINE main            { $2 }
   | stmt                    { $1 }
@@ -61,13 +62,21 @@ compound_stmt:
   | funcdef                 { $1 }
 
 funcdef:
-  | DEF NAME generic_list typed_namelist MAPSTO TYPE COLON suite {
+  | DEF NAME generic_list typed_namelist MAPSTO ty COLON suite {
     Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8),
              snd $2,
                  $3,
              snd $4,
-             snd $6,
+             $6,
              $8)
+  }
+  | DEF NAME typed_namelist MAPSTO ty COLON suite {
+    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $7),
+             snd $2,
+                 [],
+             snd $3,
+             $5,
+             $7)
   }
 
 generic_list:
@@ -75,16 +84,16 @@ generic_list:
   | LANGLE generic_list_inner RANGLE     { $2 }
 
 generic_list_inner:
-  | TYPE                                 { [snd $1] }
-  | TYPE COMMA generic_list_inner        { snd $1 :: $3 }
+  | TYPESTR                                 { [snd $1] }
+  | TYPESTR COMMA generic_list_inner        { snd $1 :: $3 }
 
 typed_namelist:
   | LPAREN RPAREN                        { (Loc.span $1 $2, []) }
   | LPAREN typed_namelist_inner RPAREN   { (Loc.span $1 $3, $2) }
 
 typed_namelist_inner:
-  | NAME COLON TYPE                            { [(snd $1, snd $3)] }
-  | NAME COLON TYPE COMMA typed_namelist_inner { (snd $1, snd $3) :: $5 }
+  | NAME COLON ty                            { [(snd $1, $3)] }
+  | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 suite:
   | simple_stmt             { [$1] }
@@ -125,4 +134,24 @@ expr_list_inner:
   | { [] }
   | expr                       { [$1] }
   | expr COMMA expr_list_inner { ($1 :: $3) }
+
+(* Types *)
+ty:
+  | simple_ty              { $1 }
+  | complex_ty             { $1 }
+
+simple_ty:
+  | TYPESTR                               { Ast.TyStr (snd $1) }
+  | TYPESTR LANGLE type_list_inner RANGLE { Ast.TyApp (snd $1, $3) }
+
+simple_ty_list:
+  | simple_ty                             { [$1] }
+  | simple_ty simple_ty_list              { $1 :: $2 }
+
+complex_ty:
+  | LPAREN simple_ty_list MAPSTO ty RPAREN  { Ast.TyFun ($2, $4) }
+
+type_list_inner:
+  | ty                                      { [$1] }
+  | ty COMMA type_list_inner                { $1 :: $3 }
 
