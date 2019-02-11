@@ -65,7 +65,7 @@ let basis_vals = make_env
      ("<", int_comparison (<));
      (">=", int_comparison (>=));
      ("<=", int_comparison (<=));
-     ("=", int_comparison (=));
+     ("==", int_comparison (=));
      ("cons", cons);
      ("car", car);
      ("cdr", cdr);
