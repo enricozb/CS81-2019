@@ -93,37 +93,27 @@ let loc_of_def = function
   | CheckTypeError  (l, _)
     -> l
 
-let ast_type_list_to_syntax typed_vars typed_params =
-  (* since first param is a list but gets converted to a StringSet,
-   * we make a helper function without the `typed_vars` parameter *)
-  let rec ast_type_list_to_syntax_helper typed_params =
-    let typed_vars = StringSet.of_list typed_vars in
-    let rec iter processed_vars = function
-      | [] -> List.rev processed_vars
-      | Ast.TyStr str :: rest ->
-          if StringSet.mem str typed_vars then
-            iter ((TyVar str) :: processed_vars) rest
-          else
-            iter ((TyCon str) :: processed_vars) rest
-      | Ast.TyApp (con, params) :: rest ->
-          let processed_vars =
-            TyApp (TyCon con, ast_type_list_to_syntax_helper params)
-            :: processed_vars
-          in
-          iter processed_vars rest
-      | Ast.TyFun (params, rtype) :: rest ->
-          let processed_vars =
-            FunctionType (
-              ast_type_list_to_syntax_helper params,
-              List.nth (ast_type_list_to_syntax_helper [rtype]) 0)
-            :: processed_vars
-          in
-          iter processed_vars rest
-    in iter [] typed_params
-  in ast_type_list_to_syntax_helper typed_params
+let rec ast_type_to_syntax = function
+  | Ast.TyVar s -> TyVar s
+  | Ast.TyStr s -> TyCon s
+  (*
+   * TyApp in concrete syntax only supports type constructors, so no higher
+   * order application
+   *)
+  | Ast.TyApp (s, tys) ->
+      TyApp (TyCon s, ast_types_to_syntax tys)
+  | Ast.TyFun (tys, rtype) ->
+      FunctionType (ast_types_to_syntax tys, ast_type_to_syntax rtype)
 
-(* TODO add richer type structure to Ast.ast
- * aka: make a type_to_syntax function *)
+and ast_types_to_syntax tyvars = List.map ast_type_to_syntax tyvars
+
+let syntax_tys_to_id_list type_vars =
+  let rec iter = function
+    | [] -> []
+    | (Ast.TyVar s) :: rest -> s :: iter rest
+  in iter type_vars
+
+
 let rec ast_to_expr = function
   | Ast.Name (l, id) ->
       Var (l, id)
@@ -131,13 +121,17 @@ let rec ast_to_expr = function
       Literal (l, i)
   | Ast.Call (l, name, args) ->
       Call (l, Var (l, name), List.map ast_to_expr args)
+  | Ast.InstantiatedCall (l, name, type_params, args) ->
+      Call (l,
+        Narrow (l,
+          Var (l, name),
+          ast_types_to_syntax type_params),
+        List.map ast_to_expr args)
   | Ast.Lambda (l, typed_params, stmt) ->
-      (* TODO: there can be no generics in lambdas, but there should be *)
-      let param_types = ast_type_list_to_syntax [] (List.map snd typed_params)
-      in
-      (* typed parameters *)
       let typed_params =
-        List.combine (List.map fst typed_params) param_types
+        List.map
+          (fun (name, ty) -> (name, ast_type_to_syntax ty))
+          typed_params
       in
       Lambda (l, typed_params, ast_to_expr stmt)
   | Ast.Bind (l, name, expr) ->
@@ -145,16 +139,16 @@ let rec ast_to_expr = function
   | Ast.Def _ ->
       failwith "ast_to_expr called on Ast.Def"
 
+
 let ast_to_def = function
   | Ast.Def (l, name, type_vars, typed_params, rtype, stmts) ->
-      (* convert rtype and typed_params to Syntax.type from
-       * the Ast.type *)
-      let rtype :: param_types = ast_type_list_to_syntax
-        type_vars
-        (rtype :: (List.map snd typed_params)) in
+      let rtype = ast_type_to_syntax rtype in
       let typed_params =
-        List.combine (List.map fst typed_params) param_types in
-
+        List.map
+          (fun (name, ty) -> (name, ast_type_to_syntax ty))
+          typed_params
+      in
+      let param_types = List.map snd typed_params in
       (* Location spanning the expressions in the function *)
       let begin_loc =
         Loc.span

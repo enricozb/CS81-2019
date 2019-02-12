@@ -9,6 +9,7 @@
     | EQUALS l
     | MAPSTO l
     | COMMA l
+    | QUOTE l
     | LANGLE l | RANGLE l
     | LBRACE l | RBRACE l
     | LPAREN l | RPAREN l
@@ -27,7 +28,7 @@
 %token <Loc.loc> DEF
 %token <Loc.loc> COLON
 %token <Loc.loc> EQUALS MAPSTO
-%token <Loc.loc> COMMA
+%token <Loc.loc> COMMA QUOTE
 %token <Loc.loc> LANGLE RANGLE
 %token <Loc.loc> LBRACE RBRACE
 %token <Loc.loc> LPAREN RPAREN
@@ -84,8 +85,8 @@ generic_list:
   | LANGLE generic_list_inner RANGLE     { $2 }
 
 generic_list_inner:
-  | TYPESTR                                 { [snd $1] }
-  | TYPESTR COMMA generic_list_inner        { snd $1 :: $3 }
+  | typevar                                 { [$1] }
+  | typevar COMMA generic_list_inner        { $1 :: $3 }
 
 typed_namelist:
   | LPAREN RPAREN                        { (Loc.span $1 $2, []) }
@@ -96,7 +97,7 @@ typed_namelist_inner:
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 suite:
-  | simple_stmt             { [$1] }
+  | simple_stmt                     { [$1] }
   | NEWLINE INDENT stmt_list DEDENT { $3 }
 
 stmt_list:
@@ -123,6 +124,9 @@ call:
   | NAME LPAREN expr_list_inner RPAREN {
     Ast.Call (Loc.span (fst $1) $4, snd $1, $3)
   }
+  | NAME LANGLE type_list_inner RANGLE LPAREN expr_list_inner RPAREN {
+    Ast.InstantiatedCall (Loc.span (fst $1) $7, snd $1, $3, $6)
+  }
 
 operator_list:
   | expr OPERATOR expr      {
@@ -140,7 +144,11 @@ ty:
   | simple_ty              { $1 }
   | complex_ty             { $1 }
 
+typevar:
+  | QUOTE TYPESTR          { snd $2 }
+
 simple_ty:
+  | typevar                               { Ast.TyVar $1 }
   | TYPESTR                               { Ast.TyStr (snd $1) }
   | TYPESTR LANGLE type_list_inner RANGLE { Ast.TyApp (snd $1, $3) }
 

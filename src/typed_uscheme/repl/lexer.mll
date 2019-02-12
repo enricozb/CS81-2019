@@ -12,6 +12,7 @@
     | IF _ -> "if"
     | DEF _ -> "def"
     | COLON _ -> ":"
+    | QUOTE _ -> "'"
     | COMMA _ -> ","
     | EQUALS _ -> "="
     | MAPSTO _ -> "->"
@@ -80,6 +81,7 @@ rule token filename = parse
   | [' ']+ { token filename lexbuf }
   | ':' { COLON (make_loc filename lexbuf) }
   | ',' { COMMA (make_loc filename lexbuf) }
+  | ''' { QUOTE (make_loc filename lexbuf) }
   | ['A'-'Z']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
     TYPESTR ((make_loc filename lexbuf), id)
   }

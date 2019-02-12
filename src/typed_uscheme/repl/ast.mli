@@ -1,4 +1,5 @@
 type ty =
+  | TyVar of string
   | TyStr of string
   | TyApp of string * ty list
   | TyFun of (ty list) * ty
@@ -12,6 +13,7 @@ type ast =
   | Num of Loc.loc * int
   | Lambda of (Loc.loc * typed_namelist * ast)
   | Call of (Loc.loc * name * (ast list))
+  | InstantiatedCall of (Loc.loc * name * (ty list) * (ast list))
   | Bind of (Loc.loc * name * ast)
   | Def of (Loc.loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
 
