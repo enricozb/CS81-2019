@@ -107,12 +107,6 @@ let rec ast_type_to_syntax = function
 
 and ast_types_to_syntax tyvars = List.map ast_type_to_syntax tyvars
 
-let syntax_tys_to_id_list type_vars =
-  let rec iter = function
-    | [] -> []
-    | (Ast.TyVar s) :: rest -> s :: iter rest
-  in iter type_vars
-
 
 let rec ast_to_expr = function
   | Ast.Name (l, id) ->
@@ -134,11 +128,22 @@ let rec ast_to_expr = function
           typed_params
       in
       Lambda (l, typed_params, ast_to_expr stmt)
+  | Ast.If (l, expr, true_stmts, false_stmts) ->
+      If (l, ast_to_expr expr,
+             ast_list_to_begin true_stmts,
+             ast_list_to_begin false_stmts)
   | Ast.Bind (l, name, expr) ->
       Set (l, name, ast_to_expr expr)
   | Ast.Def _ ->
       failwith "ast_to_expr called on Ast.Def"
 
+and ast_list_to_begin (stmts : Ast.ast list) =
+  let begin_loc =
+    Loc.span
+      (Ast.loc_of_ast @@ List.nth stmts 0)
+      (Ast.loc_of_ast @@ List.nth stmts ((List.length stmts) - 1))
+  in
+  Begin (begin_loc, List.map ast_to_expr stmts)
 
 let ast_to_def = function
   | Ast.Def (l, name, type_vars, typed_params, rtype, stmts) ->
@@ -149,21 +154,14 @@ let ast_to_def = function
           typed_params
       in
       let param_types = List.map snd typed_params in
-      (* Location spanning the expressions in the function *)
-      let begin_loc =
-        Loc.span
-          (Ast.loc_of_ast @@ List.nth stmts 0)
-          (Ast.loc_of_ast @@ List.nth stmts ((List.length stmts) - 1))
-          in
       (* If function uses generics, use Forall and TypeLambda *)
       if type_vars <> [] then
         Valrec (l, name, Forall (type_vars, FunctionType (param_types, rtype)),
           TypeLambda (l, type_vars, Lambda (l, typed_params,
-              Begin (begin_loc, List.map ast_to_expr stmts))))
+                      ast_list_to_begin stmts)))
       else
         Valrec (l, name, FunctionType (param_types, rtype),
-          Lambda (l, typed_params,
-            Begin (begin_loc, List.map ast_to_expr stmts)))
+          Lambda (l, typed_params, ast_list_to_begin stmts))
 
   | Ast.Bind (l, name, expr) ->
       Val (l, name, ast_to_expr expr)

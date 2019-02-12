@@ -10,6 +10,7 @@
     | NAME (_, s) -> s
     | NUMBER (_, i) -> string_of_int i
     | IF _ -> "if"
+    | ELSE _ -> "else"
     | DEF _ -> "def"
     | COLON _ -> ":"
     | QUOTE _ -> "'"
@@ -32,6 +33,7 @@
 
   let name loc = function
     | "if" -> IF loc
+    | "else" -> ELSE loc
     | "def" -> DEF loc
     | id -> NAME (loc, id)
 
@@ -45,6 +47,11 @@
 
   let space_stack = Stack.create ()
   let _ = Stack.push 0 space_stack
+
+  let reset_state () =
+    state := CODE;
+    Stack.clear space_stack;
+    Stack.push 0 space_stack
 
   (* outputs INDENT, DEDENT, or DEINDENT tokens *)
   let count_indent loc count =
@@ -107,6 +114,8 @@ rule token filename = parse
   | eof { EOF }
 
 and newline filename = parse
+  (* to allow empty and incomplete blocks in REPL *)
+  | [' ']* eof { EOF }
   | [' ']* as spaces {
     state := CODE;
     match count_indent (make_loc filename lexbuf) (String.length spaces) with

@@ -4,6 +4,7 @@
     | NAME (l, _)
     | NUMBER (l, _)
     | IF l
+    | ELSE l
     | DEF l
     | COLON l
     | EQUALS l
@@ -24,7 +25,7 @@
 %token <Loc.loc * string> TYPESTR
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
-%token <Loc.loc> IF
+%token <Loc.loc> IF ELSE
 %token <Loc.loc> DEF
 %token <Loc.loc> COLON
 %token <Loc.loc> EQUALS MAPSTO
@@ -44,15 +45,25 @@
 
 main:
   | NEWLINE main            { $2 }
-  | stmt                    { $1 }
+  | simple_stmt             { $1 }
+(* for interactive input NEWLINE must be after compound_stmt *)
+  | compound_stmt NEWLINE   { $1 }
 
 stmt:
   | simple_stmt             { $1 }
-  | compound_stmt NEWLINE   { $1 }
+  | compound_stmt           { $1 }
 
 simple_stmt:
   | expr NEWLINE            { $1 }
   | assign_stmt NEWLINE     { $1 }
+
+suite:
+  | simple_stmt                     { [$1] }
+  | NEWLINE INDENT stmt_list DEDENT { $3 }
+
+stmt_list:
+  | stmt                    { [$1] }
+  | stmt stmt_list          { $1 :: $2 }
 
 assign_stmt:
   | NAME EQUALS expr {
@@ -60,7 +71,15 @@ assign_stmt:
   }
 
 compound_stmt:
+  | if_stmt                 { $1 }
   | funcdef                 { $1 }
+
+(* TODO disallow stuff like `if True: x else: y` in one line *)
+if_stmt:
+  | IF expr COLON suite ELSE COLON suite {
+    Ast.If (Loc.span $1 (Ast.loc_of_ast_list $7),
+            $2, $4, $7)
+  }
 
 funcdef:
   | DEF NAME generic_list typed_namelist MAPSTO ty COLON suite {
@@ -96,14 +115,6 @@ typed_namelist_inner:
   | NAME COLON ty                            { [(snd $1, $3)] }
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
-suite:
-  | simple_stmt                     { [$1] }
-  | NEWLINE INDENT stmt_list DEDENT { $3 }
-
-stmt_list:
-  | stmt                    { [$1] }
-  | stmt stmt_list          { $1 :: $2 }
-
 expr:
   | literal                 { $1 }
   | NAME                    { Ast.Name (fst $1, snd $1) }
@@ -129,6 +140,14 @@ call:
   }
 
 operator_list:
+  | expr LANGLE expr        {
+    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
+              "<", [$1; $3])
+  }
+  | expr RANGLE expr {
+    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
+              ">", [$1; $3])
+  }
   | expr OPERATOR expr      {
     Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
               snd $2, [$1; $3])

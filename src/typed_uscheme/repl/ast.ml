@@ -17,6 +17,7 @@ type ast =
   | Call of (loc * name * (ast list))
   | InstantiatedCall of (loc * name * (ty list) * (ast list))
   | Bind of (loc * name * ast)
+  | If of (loc * ast * (ast list) * (ast list))
   | Def of (loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
 
 let rec string_of_type = function
@@ -65,10 +66,12 @@ and string_of_ast = function
       "(" ^ (string_of_ast_list params ",") ^ ")"
   | Lambda (_, typed_params, stmt) ->
       "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
+  | If (_, expr, true_body, false_body) ->
+      "if " ^ string_of_ast expr ^ ": ... "
+  | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
   | Def (_, funcname, type_vars, typed_params, rtype, stmts) ->
       "def " ^ funcname ^
         "(" ^ string_of_typed_namelist typed_params ", " ^ "): ..."
-  | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
 
 
 let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
@@ -79,8 +82,9 @@ let loc_of_ast = function
   | Call (l, _, _)
   | InstantiatedCall (l, _, _, _)
   | Lambda (l, _, _)
-  | Def (l, _, _, _, _, _)
+  | If (l, _, _, _)
   | Bind (l, _, _)
+  | Def (l, _, _, _, _, _)
     -> l
 
 let loc_of_ast_list = function

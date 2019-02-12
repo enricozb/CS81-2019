@@ -77,13 +77,16 @@ let read_line_with_prompt (prompt : string) =
 (* TODO use `filename` usefully. Right now this always parses from stdin *)
 let parse (filename : string) =
   let rec loop_until_parse str =
+    Lexer.reset_state ();
     let lexbuf = Lexing.from_string str in
       try
         loop
           (lexfun_cache filename)
+          (* (print_wrap @@ lexfun_cache filename) *)
           lexbuf
           (Parser.Incremental.main lexbuf.lex_curr_p)
       with ParseIncomplete -> begin
+        Lexer.state := CODE;
         loop_until_parse (str ^ (read_line_with_prompt "... "))
       end
   in begin

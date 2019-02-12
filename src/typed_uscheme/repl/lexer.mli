@@ -16,3 +16,5 @@ exception SyntaxError of string
 val token : string -> Lexing.lexbuf -> Parser.token
 val newline : string -> Lexing.lexbuf -> Parser.token
 
+val reset_state : unit -> unit
+
