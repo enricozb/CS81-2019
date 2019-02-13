@@ -18,6 +18,7 @@ type ast =
   | InstantiatedCall of (loc * name * (ty list) * (ast list))
   | Bind of (loc * name * ast)
   | If of (loc * ast * (ast list) * (ast list))
+  | While of (loc * ast * (ast list))
   | Def of (loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
 
 let rec string_of_type = function
@@ -68,6 +69,8 @@ and string_of_ast = function
       "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
   | If (_, expr, true_body, false_body) ->
       "if " ^ string_of_ast expr ^ ": ... "
+  | While (_, expr, body) ->
+      "while " ^ string_of_ast expr ^ ": ... "
   | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
   | Def (_, funcname, type_vars, typed_params, rtype, stmts) ->
       "def " ^ funcname ^
@@ -83,6 +86,7 @@ let loc_of_ast = function
   | InstantiatedCall (l, _, _, _)
   | Lambda (l, _, _)
   | If (l, _, _, _)
+  | While (l, _, _)
   | Bind (l, _, _)
   | Def (l, _, _, _, _, _)
     -> l

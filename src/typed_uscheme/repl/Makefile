@@ -10,7 +10,7 @@ default: repl.cma
 
 OCAMLLEX   			 = ocamllex
 OCAMLYACC  			 = menhir
-OCAMLYACC_FLAGS  = --table
+OCAMLYACC_FLAGS  = --table --explain
 OCAMLC	   			 = ocamlfind ocamlc
 
 FLAGS = -package menhirLib
@@ -53,4 +53,5 @@ repl.cmo: parser.cmo lexer.cmo ast.cmo loc.cmo
 
 clean:
 	rm -f *.cmo *.cmi *.cma parser.mli parser.ml lexer.ml
+	rm parser.conflicts
 

@@ -5,6 +5,7 @@
     | NUMBER (l, _)
     | IF l
     | ELSE l
+    | WHILE l
     | DEF l
     | COLON l
     | EQUALS l
@@ -26,6 +27,7 @@
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
 %token <Loc.loc> IF ELSE
+%token <Loc.loc> WHILE
 %token <Loc.loc> DEF
 %token <Loc.loc> COLON
 %token <Loc.loc> EQUALS MAPSTO
@@ -38,7 +40,8 @@
 %token <Loc.loc> INDENT DEDENT NEWLINE
 %token <Loc.loc * int> DEINDENT
 %token EOF
-%start main             /* the entry point */
+
+%start main             (* the entry point *)
 %type <Ast.ast> main
 
 %%
@@ -72,6 +75,7 @@ assign_stmt:
 
 compound_stmt:
   | if_stmt                 { $1 }
+  | while_stmt              { $1 }
   | funcdef                 { $1 }
 
 (* TODO disallow stuff like `if True: x else: y` in one line *)
@@ -79,6 +83,12 @@ if_stmt:
   | IF expr COLON suite ELSE COLON suite {
     Ast.If (Loc.span $1 (Ast.loc_of_ast_list $7),
             $2, $4, $7)
+  }
+
+while_stmt:
+  | WHILE expr COLON suite {
+    Ast.While (Loc.span $1 (Ast.loc_of_ast_list $4),
+               $2, $4)
   }
 
 funcdef:
@@ -116,8 +126,8 @@ typed_namelist_inner:
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 expr:
-  | literal                 { $1 }
   | NAME                    { Ast.Name (fst $1, snd $1) }
+  | literal                 { $1 }
   | lambda                  { $1 }
   | call                    { $1 }
   | LPAREN expr RPAREN      { $2 }
@@ -140,6 +150,7 @@ call:
   }
 
 operator_list:
+  (*
   | expr LANGLE expr        {
     Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
               "<", [$1; $3])
@@ -148,7 +159,8 @@ operator_list:
     Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
               ">", [$1; $3])
   }
-  | expr OPERATOR expr      {
+  *)
+  | expr OPERATOR expr {
     Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
               snd $2, [$1; $3])
   }

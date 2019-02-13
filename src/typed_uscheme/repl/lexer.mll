@@ -11,6 +11,7 @@
     | NUMBER (_, i) -> string_of_int i
     | IF _ -> "if"
     | ELSE _ -> "else"
+    | WHILE _ -> "while"
     | DEF _ -> "def"
     | COLON _ -> ":"
     | QUOTE _ -> "'"
@@ -34,6 +35,7 @@
   let name loc = function
     | "if" -> IF loc
     | "else" -> ELSE loc
+    | "while" -> WHILE loc
     | "def" -> DEF loc
     | id -> NAME (loc, id)
 
