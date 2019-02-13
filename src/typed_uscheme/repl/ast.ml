@@ -21,6 +21,7 @@ type ast =
   | If of (loc * ast * (ast list) * (ast list))
   | While of (loc * ast * (ast list))
   | Def of (loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
+  | Import of (loc * name)
 
 let rec string_of_str_list lst sep =
   let rec iter = function
@@ -78,7 +79,8 @@ and string_of_ast = function
   | Def (_, funcname, type_vars, typed_params, rtype, stmts) ->
       "def " ^ funcname ^
         "(" ^ string_of_typed_namelist typed_params ", " ^ "): ..."
-
+  | Import (_, name) ->
+      "import " ^ name
 
 let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
 
@@ -92,6 +94,7 @@ let loc_of_ast = function
   | While (l, _, _)
   | Bind (l, _, _)
   | Def (l, _, _, _, _, _)
+  | Import (l, _)
     -> l
 
 let loc_of_ast_list = function

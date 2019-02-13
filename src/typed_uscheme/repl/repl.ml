@@ -74,8 +74,8 @@ let read_line_with_prompt (prompt : string) =
   print_prompt prompt;
   (read_line ()) ^ "\n"
 
-(* TODO use `filename` usefully. Right now this always parses from stdin *)
-let parse (filename : string) =
+let parse_repl () =
+  let filename = "__main__" in
   let rec loop_until_parse str =
     Lexer.reset_state ();
     let lexbuf = Lexing.from_string str in
@@ -84,7 +84,7 @@ let parse (filename : string) =
           (lexfun_cache filename)
           (* (print_wrap @@ lexfun_cache filename) *)
           lexbuf
-          (Parser.Incremental.main lexbuf.lex_curr_p)
+          (Parser.Incremental.single_input lexbuf.lex_curr_p)
       with ParseIncomplete -> begin
         loop_until_parse (str ^ (read_line_with_prompt "... "))
       end
@@ -92,13 +92,17 @@ let parse (filename : string) =
     loop_until_parse (read_line_with_prompt ">>> ")
   end
 
+let parse_file (filename : string) =
+  let lexbuf = Lexing.from_channel (open_in filename) in
+    Parser.file_input (lexfun_cache filename) lexbuf
+
 (* takes in a function that takes in the Ast read in and any auxilliary
  * data. Feeds in `aux` into f repeatedly after each parsing. *)
 let repl (f : Ast.ast -> 'a -> 'a) (aux : 'a) =
 	try
     let aux = ref aux in
     while true do
-      aux := f (parse "__main__") (!aux)
+      aux := f (parse_repl ()) (!aux)
     done
   with
   | Lexer.SyntaxError msg ->

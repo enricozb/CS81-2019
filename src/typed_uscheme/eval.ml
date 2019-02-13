@@ -192,22 +192,12 @@ let rec eval_def env def =
         end
 
     | Use (l, filename) ->
-      failwith "Use not implemented"
-      (*
-      (* Read in and parse the file. *)
-      let channel = try
-          open_in filename
-        with
-          Sys_error msg -> Error.use_err l ~filename ~msg
-      in
-      let lexbuf = Lexing.from_channel channel in
-      let (env, count_passed, count_tests) = use_lexbuf lexbuf filename env in
+      let (env, count_passed, count_tests) = use_filename filename env in
         begin
           Printf.printf "%d of %d unit tests passed\n%!"
             count_passed count_tests;
           (env, UseResult filename)
         end
-        *)
     | CheckExpect _
     | CheckError _
     | CheckType _
@@ -242,18 +232,18 @@ and eval_def_in_use env tests def =
  *
  * Returns (num_tests_passed, num_total_tests).
  *)
-(* TODO add use
-and use_lexbuf lexbuf filename env =
+and use_filename filename env =
   (* Parse the file. *)
-  let sexprs = Parser.parse_many filename lexbuf in
+  let asts = Repl.parse_file filename in
 
   (* Helper which folds over the list of definitions in the file,
    * keeping track of modifications to both the list of unit tests and
    * the environment. *)
-  let folder (env, unit_tests) expr =
-    eval_def_in_use env unit_tests (parse_def expr) in
+
+  let folder (env, unit_tests) ast =
+    eval_def_in_use env unit_tests (ast_to_def ast) in
   (* Finally, actually evaluate the contents of the file. *)
-  let env, unit_tests = List.fold_left folder (env, []) sexprs in
+  let env, unit_tests = List.fold_left folder (env, []) asts in
 
   (* Helper which folds over the unit tests, printing a message if one
    * fails and keeping track of how many pass (in `count`). *)
@@ -266,7 +256,6 @@ and use_lexbuf lexbuf filename env =
    * run the tests in the order of definition. *)
   let count_passed = List.fold_right test_folder unit_tests 0 in
   (env, count_passed, List.length unit_tests)
-  *)
 
 (* The REPL, in the form expected by Repl. *)
 let rec repl_func ast env =

@@ -7,6 +7,7 @@
     | ELSE l
     | WHILE l
     | DEF l
+    | IMPORT l
     | COLON l
     | EQUALS l
     | MAPSTO l
@@ -27,6 +28,7 @@
 %token <Loc.loc * string> TYPESTR
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
+%token <Loc.loc> IMPORT
 %token <Loc.loc> IF ELSE
 %token <Loc.loc> WHILE
 %token <Loc.loc> DEF
@@ -43,13 +45,21 @@
 %token <Loc.loc * int> DEINDENT
 %token EOF
 
-%start main             (* the entry point *)
-%type <Ast.ast> main
+%start file_input
+%start single_input
+
+%type <Ast.ast> single_input
+%type <Ast.ast list> file_input
 
 %%
 
-main:
-  | NEWLINE main            { $2 }
+file_input:
+  | NEWLINE file_input      { $2 }
+  | stmt file_input         { $1 :: $2 }
+  | EOF                     { [] }
+
+single_input:
+  | NEWLINE single_input    { $2 }
   | simple_stmt             { $1 }
 (* for interactive input NEWLINE must be after compound_stmt *)
   | compound_stmt NEWLINE   { $1 }
@@ -61,6 +71,7 @@ stmt:
 simple_stmt:
   | expr NEWLINE            { $1 }
   | assign_stmt NEWLINE     { $1 }
+  | import_stmt NEWLINE     { $1 }
 
 suite:
   | simple_stmt                     { [$1] }
@@ -82,6 +93,11 @@ assign_stmt:
               name,
               Ast.Call (loc_op, Ast.Name (loc_op, op),
                         [Ast.Name (loc_name, name); $3]))
+  }
+
+import_stmt:
+  | IMPORT NAME {
+    Ast.Import (Loc.span $1 (fst $2), snd $2)
   }
 
 compound_stmt:

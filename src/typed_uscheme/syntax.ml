@@ -117,6 +117,8 @@ let rec ast_to_expr = function
       Set (l, name, ast_to_expr expr)
   | Ast.Def _ ->
       failwith "ast_to_expr called on Ast.Def"
+  | Ast.Import _ ->
+      failwith "ast_to_expr called on Ast.Import"
 
 and ast_list_to_begin (stmts : Ast.ast list) =
   let begin_loc =
@@ -127,6 +129,7 @@ and ast_list_to_begin (stmts : Ast.ast list) =
   Begin (begin_loc, List.map ast_to_expr stmts)
 
 let ast_to_def = function
+  | Ast.Import (l, name) -> Use (l, name ^ ".my1")
   | Ast.Def (l, name, type_vars, typed_params, rtype, stmts) ->
       let rtype = ast_type_to_syntax rtype in
       let typed_params =

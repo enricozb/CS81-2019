@@ -19,6 +19,7 @@ type ast =
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
+  | Import of (Loc.loc * name)
 
 val loc_of_ast : ast -> Loc.loc
 val loc_of_ast_list : ast list -> Loc.loc

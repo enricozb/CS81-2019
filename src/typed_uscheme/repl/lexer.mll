@@ -9,6 +9,7 @@
     | TYPESTR (_, t) -> t
     | NAME (_, s) -> s
     | NUMBER (_, i) -> string_of_int i
+    | IMPORT _ -> "import"
     | IF _ -> "if"
     | ELSE _ -> "else"
     | WHILE _ -> "while"
@@ -34,6 +35,7 @@
     Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf)
 
   let name loc = function
+    | "import" -> IMPORT loc
     | "if" -> IF loc
     | "else" -> ELSE loc
     | "while" -> WHILE loc
