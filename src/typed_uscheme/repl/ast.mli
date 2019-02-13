@@ -14,7 +14,7 @@ type ast =
   | Num of Loc.loc * int
   | Lambda of (Loc.loc * typed_namelist * ast)
   | Call of (Loc.loc * ast * (ast list))
-  | InstantiatedCall of (Loc.loc * name * (ty list) * (ast list))
+  | Instantiation of (Loc.loc * ast * (ty list))
   | Bind of (Loc.loc * name * ast)
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))

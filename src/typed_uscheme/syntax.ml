@@ -98,12 +98,8 @@ let rec ast_to_expr = function
       Literal (l, i)
   | Ast.Call (l, expr, args) ->
       Call (l, ast_to_expr expr, List.map ast_to_expr args)
-  | Ast.InstantiatedCall (l, name, type_params, args) ->
-      Call (l,
-        Narrow (l,
-          Var (l, name),
-          ast_types_to_syntax type_params),
-        List.map ast_to_expr args)
+  | Ast.Instantiation (l, expr, type_params) ->
+        Narrow (l, ast_to_expr expr, ast_types_to_syntax type_params)
   | Ast.Lambda (l, typed_params, stmt) ->
       let typed_params =
         List.map

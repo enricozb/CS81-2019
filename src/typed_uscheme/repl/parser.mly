@@ -141,14 +141,32 @@ typed_namelist_inner:
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 expr:
-  | NAME                    { Ast.Name (fst $1, snd $1) }
-  | literal                 { $1 }
-  | lambda                  { $1 }
-  | call                    { $1 }
-  | LPAREN expr RPAREN      { $2 }
-  | operator_list           { $1 }
+  | non_op_expr                 { $1 }
+  | non_op_expr OPERATOR expr   {
+    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
+              Ast.Name (fst $2, snd $2), [$1; $3])
+  }
 
-literal:
+non_op_expr:
+  | lambda                  { $1 }
+  | atom_expr               { $1 }
+
+atom_expr:
+  | atom trailer_list       {
+  let rec iter = function
+    | [] -> $1
+    | `Instantiation (l, types) :: rest ->
+      Ast.Instantiation (l, iter rest, types)
+    | `Call (l, params) :: rest ->
+      Ast.Call (l, iter rest, params)
+  in
+  iter (List.rev $2)
+  }
+
+atom:
+  | LPAREN expr RPAREN      { $2 }
+  | NAME                    { Ast.Name (fst $1, snd $1) }
+  (* TODO change to literal when adding lists *)
   | NUMBER       { Ast.Num (fst $1, snd $1) }
 
 lambda:
@@ -156,12 +174,13 @@ lambda:
     Ast.Lambda (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
   }
 
-call:
-  | expr LPAREN expr_list_inner RPAREN {
-    Ast.Call (Loc.span (Ast.loc_of_ast $1) $4, $1, $3)
+trailer_list:
+  | { [] }
+  | LANGLE type_list_inner RANGLE trailer_list {
+    `Instantiation (Loc.span $1 $3, $2) :: $4
   }
-  | NAME LANGLE type_list_inner RANGLE LPAREN expr_list_inner RPAREN {
-    Ast.InstantiatedCall (Loc.span (fst $1) $7, snd $1, $3, $6)
+  | LPAREN expr_list_inner RPAREN trailer_list {
+    `Call (Loc.span $1 $3, $2) :: $4
   }
 
 operator_list:

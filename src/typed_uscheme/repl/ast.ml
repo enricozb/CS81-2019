@@ -16,7 +16,7 @@ type ast =
   | Num of loc * int
   | Lambda of (loc * typed_namelist * ast)
   | Call of (loc * ast * (ast list))
-  | InstantiatedCall of (loc * name * (ty list) * (ast list))
+  | Instantiation of (loc * ast * (ty list))
   | Bind of (loc * name * ast)
   | If of (loc * ast * (ast list) * (ast list))
   | While of (loc * ast * (ast list))
@@ -66,9 +66,8 @@ and string_of_ast = function
   | Num (_, i) -> string_of_int i
   | Call (_, expr, params) ->
       string_of_ast expr ^ "(" ^ (string_of_ast_list params ",") ^ ")"
-  | InstantiatedCall (_, name, type_params, params) ->
-      name ^ "<" ^ string_of_type_list type_params ", " ^ ">" ^
-      "(" ^ (string_of_ast_list params ",") ^ ")"
+  | Instantiation (_, expr, types) ->
+      string_of_ast expr ^ "<" ^ string_of_type_list types ", " ^ ">"
   | Lambda (_, typed_params, stmt) ->
       "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
   | If (_, expr, true_body, false_body) ->
@@ -87,7 +86,7 @@ let loc_of_ast = function
   | Name (l, _)
   | Num (l, _)
   | Call (l, _, _)
-  | InstantiatedCall (l, _, _, _)
+  | Instantiation (l, _, _)
   | Lambda (l, _, _)
   | If (l, _, _, _)
   | While (l, _, _)
