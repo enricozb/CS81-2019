@@ -85,6 +85,8 @@ let rec ast_type_to_syntax = function
       TyApp (TyCon s, ast_types_to_syntax tys)
   | Ast.TyFun (tys, rtype) ->
       FunctionType (ast_types_to_syntax tys, ast_type_to_syntax rtype)
+  | Ast.TyForAll (tyvars, ty) ->
+      Forall (tyvars, ast_type_to_syntax ty)
 
 and ast_types_to_syntax tyvars = List.map ast_type_to_syntax tyvars
 
@@ -94,8 +96,8 @@ let rec ast_to_expr = function
       Var (l, id)
   | Ast.Num (l, i) ->
       Literal (l, i)
-  | Ast.Call (l, name, args) ->
-      Call (l, Var (l, name), List.map ast_to_expr args)
+  | Ast.Call (l, expr, args) ->
+      Call (l, ast_to_expr expr, List.map ast_to_expr args)
   | Ast.InstantiatedCall (l, name, type_params, args) ->
       Call (l,
         Narrow (l,

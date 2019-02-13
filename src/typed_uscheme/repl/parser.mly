@@ -80,7 +80,8 @@ assign_stmt:
     let loc_op, op = $2 in
     Ast.Bind (Loc.span loc_name (Ast.loc_of_ast $3),
               name,
-              Ast.Call (loc_op, op, [Ast.Name (loc_name, name); $3]))
+              Ast.Call (loc_op, Ast.Name (loc_op, op),
+                        [Ast.Name (loc_name, name); $3]))
   }
 
 compound_stmt:
@@ -132,7 +133,11 @@ typed_namelist:
   | LPAREN typed_namelist_inner RPAREN   { (Loc.span $1 $3, $2) }
 
 typed_namelist_inner:
-  | NAME COLON ty                            { [(snd $1, $3)] }
+  | NAME COLON ty { [(snd $1, $3)] }
+  | NAME LANGLE generic_list_inner RANGLE COLON ty {
+    [(snd $1, Ast.TyForAll ($3, $6))]
+  }
+
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 expr:
@@ -152,8 +157,8 @@ lambda:
   }
 
 call:
-  | NAME LPAREN expr_list_inner RPAREN {
-    Ast.Call (Loc.span (fst $1) $4, snd $1, $3)
+  | expr LPAREN expr_list_inner RPAREN {
+    Ast.Call (Loc.span (Ast.loc_of_ast $1) $4, $1, $3)
   }
   | NAME LANGLE type_list_inner RANGLE LPAREN expr_list_inner RPAREN {
     Ast.InstantiatedCall (Loc.span (fst $1) $7, snd $1, $3, $6)
@@ -172,7 +177,7 @@ operator_list:
   *)
   | expr OPERATOR expr {
     Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
-              snd $2, [$1; $3])
+              Ast.Name (fst $2, snd $2), [$1; $3])
   }
 
 expr_list_inner:

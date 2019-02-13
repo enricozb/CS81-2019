@@ -25,7 +25,7 @@ type expr =
 and formal = id * scheme_type
 
 and scheme_type =
-  (* Type constructors like `int` and `list`. *)
+  (* Type constructors like `Int` and `List`. *)
   | TyCon of id
   (* Type variables, including the `'`. *)
   | TyVar of id
