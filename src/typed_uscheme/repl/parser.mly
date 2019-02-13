@@ -17,6 +17,7 @@
     | LPAREN l | RPAREN l
     | LBRACK l | RBRACK l
     | OPERATOR (l, _)
+    | ASSIGNOPERATOR (l, _)
     | INDENT l | DEDENT l | NEWLINE l
     | DEINDENT (l, _)
       -> l
@@ -37,6 +38,7 @@
 %token <Loc.loc> LPAREN RPAREN
 %token <Loc.loc> LBRACK RBRACK
 %token <Loc.loc * string> OPERATOR
+%token <Loc.loc * string> ASSIGNOPERATOR
 %token <Loc.loc> INDENT DEDENT NEWLINE
 %token <Loc.loc * int> DEINDENT
 %token EOF
@@ -71,6 +73,14 @@ stmt_list:
 assign_stmt:
   | NAME EQUALS expr {
     Ast.Bind (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
+  }
+
+  | NAME ASSIGNOPERATOR expr {
+    let loc_name, name = $1 in
+    let loc_op, op = $2 in
+    Ast.Bind (Loc.span loc_name (Ast.loc_of_ast $3),
+              name,
+              Ast.Call (loc_op, op, [Ast.Name (loc_name, name); $3]))
   }
 
 compound_stmt:

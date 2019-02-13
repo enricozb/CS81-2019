@@ -86,7 +86,6 @@ let parse (filename : string) =
           lexbuf
           (Parser.Incremental.main lexbuf.lex_curr_p)
       with ParseIncomplete -> begin
-        Lexer.state := CODE;
         loop_until_parse (str ^ (read_line_with_prompt "... "))
       end
   in begin

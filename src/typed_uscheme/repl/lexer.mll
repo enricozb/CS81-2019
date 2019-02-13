@@ -23,6 +23,7 @@
     | LPAREN _ -> "(" | RPAREN _ -> ")"
     | LBRACK _ -> "[" | RBRACK _ -> "]"
     | OPERATOR (_, op) -> op
+    | ASSIGNOPERATOR (_, op) -> op
     | INDENT _ -> "INDENT"
     | DEDENT _ -> "DEDENT"
     | NEWLINE _ -> "NEWLINE"
@@ -82,6 +83,9 @@
 let operators = ['.' '+' '-' '*' '/' '%' '<' '>' '=' '^']
 
 rule token filename = parse
+  | ['#'] [^'\n']* ['\n'] {
+    token filename lexbuf
+  }
   | ['\n'] {
     incr line_number;
     state := RECENT_NEWLINE;
@@ -108,9 +112,17 @@ rule token filename = parse
     match op with
     | "<" -> LANGLE (make_loc filename lexbuf)
     | ">" -> RANGLE (make_loc filename lexbuf)
+    (* These are to prevent <= and >= from becoming assignment operators *)
+    | "<=" -> OPERATOR ((make_loc filename lexbuf), "<=")
+    | ">=" -> OPERATOR ((make_loc filename lexbuf), ">=")
     | "=" -> EQUALS (make_loc filename lexbuf)
     | "->" -> MAPSTO (make_loc filename lexbuf)
-    | op -> OPERATOR ((make_loc filename lexbuf), op)
+    | op ->
+        if String.get op (String.length op - 1) = '=' then
+          ASSIGNOPERATOR ((make_loc filename lexbuf),
+            String.sub op 0 (String.length op - 1))
+        else
+          OPERATOR ((make_loc filename lexbuf), op)
   }
   | _ as t { raise (SyntaxError ("unexpected token " ^ Char.escaped t)) }
   | eof { EOF }
