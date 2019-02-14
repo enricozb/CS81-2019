@@ -10,6 +10,7 @@
     | NAME (_, s) -> s
     | NUMBER (_, i) -> string_of_int i
     | IMPORT _ -> "import"
+    | FORALL _ -> "forall"
     | IF _ -> "if"
     | ELSE _ -> "else"
     | WHILE _ -> "while"
@@ -36,6 +37,7 @@
 
   let name loc = function
     | "import" -> IMPORT loc
+    | "forall" -> FORALL loc
     | "if" -> IF loc
     | "else" -> ELSE loc
     | "while" -> WHILE loc

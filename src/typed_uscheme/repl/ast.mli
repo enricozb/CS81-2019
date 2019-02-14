@@ -13,6 +13,7 @@ type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * int
   | Lambda of (Loc.loc * typed_namelist * ast)
+  | TypeLambda of (Loc.loc * (tyvar list) * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Instantiation of (Loc.loc * ast * (ty list))
   | Bind of (Loc.loc * name * ast)

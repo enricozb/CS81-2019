@@ -15,6 +15,7 @@ type ast =
   | Name of loc * name
   | Num of loc * int
   | Lambda of (loc * typed_namelist * ast)
+  | TypeLambda of (loc * (tyvar list) * ast)
   | Call of (loc * ast * (ast list))
   | Instantiation of (loc * ast * (ty list))
   | Bind of (loc * name * ast)
@@ -71,6 +72,8 @@ and string_of_ast = function
       string_of_ast expr ^ "<" ^ string_of_type_list types ", " ^ ">"
   | Lambda (_, typed_params, stmt) ->
       "(" ^ string_of_typed_namelist typed_params ", " ^ ") -> " ^ string_of_ast stmt
+  | TypeLambda (_, type_vars, expr) ->
+      "forall<'" ^ string_of_str_list type_vars ", '" ^ "> -> " ^ string_of_ast expr
   | If (_, expr, true_body, false_body) ->
       "if " ^ string_of_ast expr ^ ": ... "
   | While (_, expr, body) ->
@@ -90,6 +93,7 @@ let loc_of_ast = function
   | Call (l, _, _)
   | Instantiation (l, _, _)
   | Lambda (l, _, _)
+  | TypeLambda (l, _, _)
   | If (l, _, _, _)
   | While (l, _, _)
   | Bind (l, _, _)

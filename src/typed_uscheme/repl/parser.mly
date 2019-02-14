@@ -8,6 +8,7 @@
     | WHILE l
     | DEF l
     | IMPORT l
+    | FORALL l
     | COLON l
     | EQUALS l
     | MAPSTO l
@@ -29,6 +30,7 @@
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
 %token <Loc.loc> IMPORT
+%token <Loc.loc> FORALL
 %token <Loc.loc> IF ELSE
 %token <Loc.loc> WHILE
 %token <Loc.loc> DEF
@@ -165,6 +167,7 @@ expr:
 
 non_op_expr:
   | lambda                  { $1 }
+  | typelambda              { $1 }
   | atom_expr               { $1 }
 
 atom_expr:
@@ -188,6 +191,11 @@ atom:
 lambda:
   | typed_namelist MAPSTO expr {
     Ast.Lambda (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
+  }
+
+typelambda:
+  | FORALL LANGLE generic_list_inner RANGLE MAPSTO expr {
+    Ast.TypeLambda (Loc.span $1 (Ast.loc_of_ast $6), $3, $6)
   }
 
 trailer_list:

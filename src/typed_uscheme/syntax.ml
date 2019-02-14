@@ -107,6 +107,8 @@ let rec ast_to_expr = function
           typed_params
       in
       Lambda (l, typed_params, ast_to_expr stmt)
+  | Ast.TypeLambda (l, typed_params, stmt) ->
+      TypeLambda (l, typed_params, ast_to_expr stmt)
   | Ast.If (l, expr, true_stmts, false_stmts) ->
       If (l, ast_to_expr expr,
              ast_list_to_begin true_stmts,
