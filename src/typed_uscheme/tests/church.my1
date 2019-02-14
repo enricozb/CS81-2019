@@ -1,0 +1,87 @@
+#
+# Defines Church numerals and some operations on them.
+#
+
+# In the following, try to read (forall ('a) (('a -> 'a) -> ('a -> 'a)))
+# as "church". It is simply the type of Church numerals. If we had
+# type aliases, everything below would be much more readable.
+
+# type Church = <'A>(('A -> 'A) -> ('A -> 'A))
+
+zero = forall<'A> -> (s: ('A -> 'A)) -> (z: 'A) -> z
+
+
+def succ(
+    x: <'A>(('A -> 'A) -> ('A -> 'A))
+  ) -> <'A>(('A -> 'A) -> ('A -> 'A)):
+  forall<'A> -> (s: ('A -> 'A)) -> (z: 'A) -> s(x<'A>(s)(z))
+
+
+def church_of_int(x: Int) -> <'A>(('A -> 'A) -> ('A -> 'A)):
+  if x == 0:
+    zero
+  else:
+    succ(church_of_int(x - 1))
+
+
+def incr(x: Int) -> Int:
+  x + 1
+
+
+def int_of_church(
+    x: <'A>(('A -> 'A) -> ('A -> 'A))
+  ) -> Int:
+  x<Int>(incr)(0)
+
+
+# Check that our basic conversions to and from ints work.
+def id_via_church(x: Int) -> Int:
+  int_of_church(church_of_int(x))
+
+
+check_expect 0, id_via_church(0)
+check_expect 1, id_via_church(1)
+check_expect 5, id_via_church(5)
+
+# Now, some operations on church integers.
+
+# x + y is achieved by replacing x's zero with y.
+def add_church(
+    x: <'A>(('A -> 'A) -> ('A -> 'A)),
+    y: <'A>(('A -> 'A) -> ('A -> 'A))
+  ) -> <'A>(('A -> 'A) -> ('A -> 'A)):
+  forall<'A> -> (s: ('A -> 'A)) -> (z: 'A) -> x<'A>(s)(y<'A>(s)(z))
+
+# x * y is achieved by replacing x's successor function with adding y.
+def mul_church(
+    x: <'A>(('A -> 'A) -> ('A -> 'A)),
+    y: <'A>(('A -> 'A) -> ('A -> 'A))
+  ) -> <'A>(('A -> 'A) -> ('A -> 'A)):
+  forall<'A> -> (s: ('A -> 'A)) -> x<'A>(y<'A>(s))
+
+# x ^ y is achieved by magic.
+def exp_church(
+    x: <'A>(('A -> 'A) -> ('A -> 'A)),
+    y: <'A>(('A -> 'A) -> ('A -> 'A))
+  ) -> <'A>(('A -> 'A) -> ('A -> 'A)):
+  forall<'A> -> y<('A -> 'A)>(x<'A>)
+
+one = church_of_int(1)
+two = church_of_int(2)
+
+check_expect 0, int_of_church(add_church(zero, zero))
+check_expect 2, int_of_church(add_church(zero, two))
+check_expect 3, int_of_church(add_church(one, two))
+
+check_expect 0, int_of_church(mul_church(zero, zero))
+check_expect 0, int_of_church(mul_church(zero, two))
+check_expect 0, int_of_church(mul_church(two, zero))
+check_expect 2, int_of_church(mul_church(one, two))
+check_expect 4, int_of_church(mul_church(two, two))
+
+check_expect 1, int_of_church(exp_church(zero, zero))
+check_expect 0, int_of_church(exp_church(zero, two))
+check_expect 1, int_of_church(exp_church(two, zero))
+check_expect 1, int_of_church(exp_church(one, two))
+check_expect 4, int_of_church(exp_church(two, two))
+

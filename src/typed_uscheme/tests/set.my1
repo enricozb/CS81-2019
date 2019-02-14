@@ -1,0 +1,14 @@
+#
+# Setting variables.
+#
+
+test_val = 0
+test_val = 1
+
+
+check_expect test_val, 1
+
+# Not sure what else to test here since myth has sets only in blocks
+# check_type_error (set test-val #t))
+# (check-expect (let ((test-val 2)) (begin (set test-val 3) test-val)) 3)
+# (check-expect (begin (let ((test-val 2)) (set test-val 3)) test-val) 1)

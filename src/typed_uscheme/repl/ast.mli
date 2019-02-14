@@ -21,6 +21,10 @@ type ast =
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
   | Import of (Loc.loc * name)
+  | CheckExpect of (Loc.loc * ast * ast)
+  | CheckType of (Loc.loc * ast * ty)
+  | CheckError of (Loc.loc * ast)
+  | CheckTypeError of (Loc.loc * ast)
 
 val loc_of_ast : ast -> Loc.loc
 val loc_of_ast_list : ast list -> Loc.loc

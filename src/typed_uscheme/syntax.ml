@@ -4,13 +4,6 @@ module StringSet = Set.Make(String)
 
 let error = Error.syntax_err
 
-let reserved_ids = [
-  "true";
-  "false";
-  "unit";
-  "nil"
-]
-
 type id = string
 
 type scheme_type =
@@ -121,6 +114,8 @@ let rec ast_to_expr = function
       failwith "ast_to_expr called on Ast.Def"
   | Ast.Import _ ->
       failwith "ast_to_expr called on Ast.Import"
+  | _ ->
+      failwith "ast_to_expr called on Ast. something"
 
 and ast_list_to_begin (stmts : Ast.ast list) =
   let begin_loc =
@@ -148,9 +143,17 @@ let ast_to_def = function
       else
         Valrec (l, name, FunctionType (param_types, rtype),
           Lambda (l, typed_params, ast_list_to_begin stmts))
-
   | Ast.Bind (l, name, expr) ->
       Val (l, name, ast_to_expr expr)
+
+  | Ast.CheckExpect (l, expr_1, expr_2) ->
+      CheckExpect (l, ast_to_expr expr_1, ast_to_expr expr_2)
+  | Ast.CheckType (l, expr, ty) ->
+      CheckType (l, ast_to_expr expr, ast_type_to_syntax ty)
+  | Ast.CheckError (l, expr) ->
+      CheckError (l, ast_to_expr expr)
+  | Ast.CheckTypeError (l, expr) ->
+      CheckTypeError (l, ast_to_expr expr)
   | ast ->
       Expr (Ast.loc_of_ast ast, ast_to_expr ast)
 

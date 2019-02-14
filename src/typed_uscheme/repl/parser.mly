@@ -7,6 +7,10 @@
     | ELSE l
     | WHILE l
     | DEF l
+    | CHECKEXPECT l
+    | CHECKTYPE l
+    | CHECKERROR l
+    | CHECKTYPEERROR l
     | IMPORT l
     | FORALL l
     | COLON l
@@ -29,6 +33,7 @@
 %token <Loc.loc * string> TYPESTR
 %token <Loc.loc * string> NAME
 %token <Loc.loc * int> NUMBER
+%token <Loc.loc> CHECKEXPECT CHECKTYPE CHECKERROR CHECKTYPEERROR
 %token <Loc.loc> IMPORT
 %token <Loc.loc> FORALL
 %token <Loc.loc> IF ELSE
@@ -72,6 +77,7 @@ stmt:
 
 simple_stmt:
   | expr NEWLINE            { $1 }
+  | check_stmt NEWLINE      { $1 }
   | assign_stmt NEWLINE     { $1 }
   | import_stmt NEWLINE     { $1 }
 
@@ -82,6 +88,21 @@ suite:
 stmt_list:
   | stmt                    { [$1] }
   | stmt stmt_list          { $1 :: $2 }
+
+check_stmt:
+  | CHECKEXPECT expr COMMA expr   {
+    Ast.CheckExpect (Loc.span $1 (Ast.loc_of_ast $4), $2, $4)
+  }
+  (* TODO types don't carry locs, so I can't span here... *)
+  | CHECKTYPE expr COMMA ty     {
+    Ast.CheckType (Loc.span $1 $3, $2, $4)
+  }
+  | CHECKERROR expr {
+    Ast.CheckError (Loc.span $1 (Ast.loc_of_ast $2), $2)
+  }
+  | CHECKTYPEERROR expr {
+    Ast.CheckTypeError (Loc.span $1 (Ast.loc_of_ast $2), $2)
+  }
 
 assign_stmt:
   | NAME EQUALS expr {
@@ -152,10 +173,6 @@ typed_namelist:
 
 typed_namelist_inner:
   | NAME COLON ty { [(snd $1, $3)] }
-  | NAME LANGLE generic_list_inner RANGLE COLON ty {
-    [(snd $1, Ast.TyForAll ($3, $6))]
-  }
-
   | NAME COLON ty COMMA typed_namelist_inner { (snd $1, $3) :: $5 }
 
 expr:
@@ -207,22 +224,6 @@ trailer_list:
     `Call (Loc.span $1 $3, $2) :: $4
   }
 
-operator_list:
-  (*
-  | expr LANGLE expr        {
-    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
-              "<", [$1; $3])
-  }
-  | expr RANGLE expr {
-    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
-              ">", [$1; $3])
-  }
-  *)
-  | expr OPERATOR expr {
-    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
-              Ast.Name (fst $2, snd $2), [$1; $3])
-  }
-
 expr_list_inner:
   | { [] }
   | expr                       { [$1] }
@@ -230,8 +231,17 @@ expr_list_inner:
 
 (* Types *)
 ty:
+  | small_ty                              { $1 }
+  | LANGLE generic_list_inner RANGLE LPAREN arrow_ty RPAREN {
+    Ast.TyForAll ($2, $5)
+  }
+  | LANGLE generic_list_inner RANGLE LPAREN ty RPAREN {
+    Ast.TyForAll ($2, $5)
+  }
+
+small_ty:
   | simple_ty              { $1 }
-  | complex_ty             { $1 }
+  | LPAREN arrow_ty RPAREN { $2 }
 
 typevar:
   | QUOTE TYPESTR          { snd $2 }
@@ -241,12 +251,12 @@ simple_ty:
   | TYPESTR                               { Ast.TyStr (snd $1) }
   | TYPESTR LANGLE type_list_inner RANGLE { Ast.TyApp (snd $1, $3) }
 
-simple_ty_list:
-  | simple_ty                             { [$1] }
-  | simple_ty simple_ty_list              { $1 :: $2 }
+ty_list:
+  | ty                             { [$1] }
+  | ty ty_list                     { $1 :: $2 }
 
-complex_ty:
-  | LPAREN simple_ty_list MAPSTO ty RPAREN  { Ast.TyFun ($2, $4) }
+arrow_ty:
+  | ty_list MAPSTO ty { Ast.TyFun ($1, $3) }
 
 type_list_inner:
   | ty                                      { [$1] }

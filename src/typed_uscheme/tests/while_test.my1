@@ -1,0 +1,27 @@
+#
+# While loops.
+#
+
+def unit_gen() -> Unit:
+  while 1 == 0:
+    0
+
+unit = unit_gen()
+check_type unit, Unit
+
+# Test 1
+test_val = 1
+
+while test_val <= 10:
+  test_val *= 2
+
+check_expect test_val, 16
+
+# Test 2
+other_test_val = 0
+
+while other_test_val >= 1:
+  other_test_val = 10
+
+check_expect other_test_val, 0
+

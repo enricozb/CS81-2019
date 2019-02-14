@@ -123,7 +123,7 @@ let eval_test env = function
     let actual = eval_expr env.val_env to_check in
     let expected = eval_expr env.val_env result in
     if actual <> expected then begin
-      Error.eprintf "check-expect failed: got %s but expected %s\n"
+      Error.eprintf "check_expect failed: got %s but expected %s\n"
         (string_of_val actual) (string_of_val expected);
       Error.print_loc l;
       false
@@ -133,7 +133,7 @@ let eval_test env = function
     ignore (Type.typecheck_expr env.type_env to_check);
     begin try
         ignore (eval_expr env.val_env to_check);
-        Error.eprintf "check-error failed: evaluated with no error\n";
+        Error.eprintf "check_error failed: evaluated with no error\n";
         Error.print_loc l;
         false
       with Error.UScheme_err _ -> true
@@ -141,7 +141,7 @@ let eval_test env = function
   | CheckTypeTest (l, to_check, expected) ->
     let actual = Type.typecheck_expr env.type_env to_check in
     if not (actual =|= expected) then begin
-      Error.eprintf "check-type failed: found %s; expected %s\n"
+      Error.eprintf "check_type failed: found %s; expected %s\n"
         (Type.string_of_type actual) (Type.string_of_type expected);
       Error.print_loc l;
       false

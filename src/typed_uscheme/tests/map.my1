@@ -1,0 +1,22 @@
+#
+# A smoke test: define a "map" function.
+#
+
+int_cons = cons<Int>
+int_nil = nil<Int>
+test_list = int_cons(1, int_cons(2, int_cons(3, int_nil)))
+test_list_result = int_cons(2, int_cons(3, int_cons(4, int_nil)))
+
+def incr(x: Int) -> Int:
+  x + 1
+
+def map<'A, 'B>(f: ('A -> 'B), lst: List<'A>) -> List<'B>:
+  if is_nil<'A>(lst):
+    nil<'B>
+  else:
+    cons<'B>(f(car<'A>(lst)), map<'A, 'B>(f, cdr<'A>(lst)))
+
+int_map = map<Int, Int>
+
+check_expect test_list_result, int_map(incr, test_list)
+

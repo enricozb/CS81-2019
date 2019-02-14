@@ -23,6 +23,10 @@ type ast =
   | While of (loc * ast * (ast list))
   | Def of (loc * name * (tyvar list) * (typed_namelist) * ty * (ast list))
   | Import of (loc * name)
+  | CheckExpect of (loc * ast * ast)
+  | CheckType of (loc * ast * ty)
+  | CheckError of (loc * ast)
+  | CheckTypeError of (loc * ast)
 
 let rec string_of_str_list lst sep =
   let rec iter = function
@@ -99,6 +103,10 @@ let loc_of_ast = function
   | Bind (l, _, _)
   | Def (l, _, _, _, _, _)
   | Import (l, _)
+  | CheckExpect (l, _, _)
+  | CheckType (l, _, _)
+  | CheckError (l, _)
+  | CheckTypeError (l, _)
     -> l
 
 let loc_of_ast_list = function

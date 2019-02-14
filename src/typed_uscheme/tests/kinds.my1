@@ -1,0 +1,17 @@
+#
+# Check that the type system does not allow ill-kinded types.
+#
+
+def unit_gen() -> Unit:
+  while 1 == 0:
+    0
+
+unit = unit_gen()
+
+check_type_error (x: Int<Unit>) -> x + 1
+check_type_error nil<Int, Int>
+
+check_type_error (x: List) -> unit
+check_type_error (x: Int<List>) -> unit
+check_type_error (x: List<List>) -> unit
+

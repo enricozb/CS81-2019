@@ -9,6 +9,10 @@
     | TYPESTR (_, t) -> t
     | NAME (_, s) -> s
     | NUMBER (_, i) -> string_of_int i
+    | CHECKEXPECT _ -> "check_expect"
+    | CHECKTYPE _ -> "check_type"
+    | CHECKERROR _ -> "check_error"
+    | CHECKTYPEERROR _ -> "check_type_error"
     | IMPORT _ -> "import"
     | FORALL _ -> "forall"
     | IF _ -> "if"
@@ -36,6 +40,10 @@
     Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf)
 
   let name loc = function
+    | "check_expect" -> CHECKEXPECT loc
+    | "check_type" -> CHECKTYPE loc
+    | "check_error" -> CHECKERROR loc
+    | "check_type_error" -> CHECKTYPEERROR loc
     | "import" -> IMPORT loc
     | "forall" -> FORALL loc
     | "if" -> IF loc
@@ -51,11 +59,13 @@
   exception SyntaxError of string
 
   let line_number = ref 1
+  let paren_count = ref 0
 
   let space_stack = Stack.create ()
   let _ = Stack.push 0 space_stack
 
   let reset_state () =
+    paren_count := 0;
     state := CODE;
     Stack.clear space_stack;
     Stack.push 0 space_stack
@@ -92,8 +102,12 @@ rule token filename = parse
   }
   | ['\n'] {
     incr line_number;
-    state := RECENT_NEWLINE;
-    NEWLINE (make_loc filename lexbuf)
+    if !paren_count = 0 then begin
+      state := RECENT_NEWLINE;
+      NEWLINE (make_loc filename lexbuf)
+    end
+    else
+      token filename lexbuf
   }
   | [' ']+ { token filename lexbuf }
   | ':' { COLON (make_loc filename lexbuf) }
@@ -108,8 +122,14 @@ rule token filename = parse
   | ['0'-'9']+ as num {
     NUMBER ((make_loc filename lexbuf), (int_of_string num))
   }
-  | ['('] { LPAREN (make_loc filename lexbuf) }
-  | [')'] { RPAREN (make_loc filename lexbuf) }
+  | ['('] {
+    incr paren_count;
+    LPAREN (make_loc filename lexbuf)
+  }
+  | [')'] {
+    decr paren_count;
+    RPAREN (make_loc filename lexbuf)
+  }
   | ['['] { LBRACK (make_loc filename lexbuf) }
   | [']'] { RBRACK (make_loc filename lexbuf) }
   | operators+ as op {
@@ -119,6 +139,7 @@ rule token filename = parse
     (* These are to prevent <= and >= from becoming assignment operators *)
     | "<=" -> OPERATOR ((make_loc filename lexbuf), "<=")
     | ">=" -> OPERATOR ((make_loc filename lexbuf), ">=")
+    | "==" -> OPERATOR ((make_loc filename lexbuf), "==")
     | "=" -> EQUALS (make_loc filename lexbuf)
     | "->" -> MAPSTO (make_loc filename lexbuf)
     | op ->
