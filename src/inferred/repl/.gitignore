@@ -1,0 +1,10 @@
+*.cmi
+*.cmo
+*.cma
+
+
+# Generated files
+lexer.ml
+parser.ml
+parser.mli
+

@@ -151,7 +151,7 @@ and typecheck_def gamma (l, def) = match def with
     let sigma = generalize_ty (subst_ty theta alpha) (free_tyvars_tyenv gamma) in
       (tyenv_bind gamma name sigma, sigma)
 
-  | Expr expr -> typecheck_def gamma (l, Val ("it", expr))
+  | Expr expr -> typecheck_def gamma (l, Val ("_", expr))
 
   | Define (name, params, body) ->
     typecheck_def gamma (l, ValRec (name, (l, Lambda (params, body))))
@@ -230,7 +230,7 @@ let rec eval_def env (l, def) = match def with
       (env' (), closure)
   | ValRec (name, (l, _)) -> Error.rec_err l name
 
-  | Expr expr -> eval_def env (l, Val ("it", expr))
+  | Expr expr -> eval_def env (l, Val ("_", expr))
 
   | Define (name, params, body) ->
     eval_def env (l, ValRec (name, (l, Lambda (params, body))))
@@ -342,13 +342,13 @@ let is_test (_, def) = match def with
  * print argument is true. *)
 let rec do_def print (gamma, env) (l, def) = match def with
   | Use filename ->
-    let channel = try
-        open_in filename
+      begin
+      try
+        let xs = Repl.parse_file filename in
+        use_func (gamma, env) filename xs
       with
-        Sys_error msg -> Error.use_err l ~filename ~msg in
-    let lexbuf = Lexing.from_channel channel in
-    let xs = Parser.parse_many filename lexbuf in
-      use_func (gamma, env) filename xs
+        Sys_error msg -> Error.use_err l ~filename ~msg
+      end
   | _ ->
     try
       let (gamma', ty) = typecheck_def gamma (l, def) in
@@ -366,9 +366,9 @@ and use_func (gamma, env) filename xs =
     Printf.printf "Imported %s\n%d of %d tests passed\n" filename n_passed n_tests;
     (gamma, env)
 
-let rec repl_func (gamma, env) xs =
+let rec repl_func ast (gamma, env) =
   try
-    let defs = List.map parse_def xs in
-      List.fold_left (do_def true) (gamma, env) defs
+    let def = parse_def ast in
+    do_def true (gamma, env) def
   with Error.NanoML_err e -> Error.print_err e; (gamma, env)
 

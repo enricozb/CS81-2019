@@ -1,7 +1,8 @@
 NAME = nano_ml
-INCS = ../sexpr/*.cmi
-LIBS = sexpr.cma
-LIBDIR = ../sexpr
+INCS = repl/*.cmi
+LIBS = repl.cma
+LIBDIR = repl
+FLAGS = -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
 
 SRC = error env type syntax basis eval
 
@@ -14,9 +15,9 @@ default: compile
 .PHONY: compile test clean
 
 compile:
-	ocamlfind ocamlc -I ${LIBDIR} -c ${MLI}
-	ocamlfind ocamlc -I ${LIBDIR} -c ${ML}
-	ocamlfind ocamlc -I ${LIBDIR} ${LIBS} ${CMO} -o ${NAME}
+	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} -c ${MLI}
+	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} -c ${ML}
+	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} ${LIBS} ${CMO} -o ${NAME}
 
 test:
 	python3 run_tests.py

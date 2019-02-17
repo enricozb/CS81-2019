@@ -33,12 +33,13 @@ val use_func :
   (Type.type_scheme Env.StringMap.t * Env.StringSet.t) *
   Syntax.value Env.StringMap.t ->
   string ->
-  Sexpr.expr list ->
+  Ast.ast list ->
   (Type.type_scheme Env.StringMap.t * Env.StringSet.t) *
   Syntax.value Env.StringMap.t
 val repl_func :
+  Ast.ast ->
   (Type.type_scheme Env.StringMap.t * Env.StringSet.t) *
   Syntax.value Env.StringMap.t ->
-  Sexpr.expr list ->
   (Type.type_scheme Env.StringMap.t * Env.StringSet.t) *
   Syntax.value Env.StringMap.t
+

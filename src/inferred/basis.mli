@@ -26,4 +26,5 @@ val unary_fun_sig : Type.ml_type -> Type.ml_type -> Type.ml_type
 val binary_fun_sig : Type.ml_type -> Type.ml_type -> Type.ml_type
 val prim_sigs : (string * Type.ml_type) list
 val prim_gamma : Type.type_scheme Env.StringMap.t * Env.StringSet.t
-val nanoml_basis : string
+val myth_basis : string
+

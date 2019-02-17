@@ -1,4 +1,5 @@
 val error : Loc.loc -> string -> 'a
+
 type expr =
     Literal of value
   | Var of string
@@ -20,9 +21,11 @@ and value =
   | Primitive of primop
   | Ref of value ref
 and primop = value list -> Loc.loc -> value
+
 val eq_val : value -> value -> bool
 val render_val : value -> string
 val render_pair : value -> value -> string
+
 type def =
     Val of string * annotated_expr
   | ValRec of string * annotated_expr
@@ -35,13 +38,15 @@ type def =
   | CheckPrincipalType of annotated_expr * Type.type_scheme
   | CheckTypeError of annotated_expr
 and annotated_def = Loc.loc * def
-val parse_expr : Sexpr.expr -> annotated_expr
-val parse_list_literal : Sexpr.expr -> value
-val parse_binding : Sexpr.expr -> string * annotated_expr
-val parse_formal : Sexpr.expr -> string
-val is_fun_ty : Sexpr.expr list -> bool
-val parse_type : Sexpr.expr -> Type.ml_type
-val parse_arg : Sexpr.expr -> string
-val parse_args : Sexpr.expr -> string list
-val parse_tyscheme : Sexpr.expr -> Type.type_scheme
-val parse_def : Sexpr.expr -> Loc.loc * def
+
+val parse_expr : Ast.ast -> annotated_expr
+val parse_def : Ast.ast -> annotated_def
+(*val parse_list_literal : Ast.ast -> value*)
+(*val parse_binding : Ast.ast -> string * annotated_expr*)
+(*val parse_formal : Ast.ast -> string*)
+(*val is_fun_ty : Ast.ast list -> bool*)
+(*val parse_type : Ast.ast -> Type.ml_type*)
+(*val parse_arg : Ast.ast -> string*)
+(*val parse_args : Ast.ast -> string list*)
+(*val parse_tyscheme : Ast.ast -> Type.type_scheme*)
+

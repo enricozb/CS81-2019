@@ -68,7 +68,7 @@ let is_null = unary_fun (fun e l -> match e with
   | _ -> Bool false)
 
 let prim_env = bind_pairs empty_env
-  [("null?", is_null);
+  [("is_null", is_null);
 
    ("+", num_fun_to_num (+));
    ("*", num_fun_to_num ( * ));
@@ -76,10 +76,10 @@ let prim_env = bind_pairs empty_env
    ("-", num_fun_to_num (-));
    (">", num_fun_to_bool (>));
    ("<", num_fun_to_bool (<));
-   ("=", eq);
+   ("==", eq);
 
-   ("#f", Bool false);
-   ("#t", Bool true);
+   ("false", Bool false);
+   ("true", Bool true);
    ("nil", Nil);
 
    ("cons", cons);
@@ -108,7 +108,7 @@ let unary_fun_sig a b = funtype_of [a] b
 let binary_fun_sig a b = funtype_of [a; a] b
 
 let prim_sigs =
-  [("null?", unary_fun_sig alpha_list bool_ty);
+  [("is_null", unary_fun_sig alpha_list bool_ty);
 
    ("+", binary_fun_sig num_ty num_ty);
    ("*", binary_fun_sig num_ty num_ty);
@@ -120,11 +120,11 @@ let prim_sigs =
    (">=", binary_fun_sig num_ty bool_ty);
    ("<=", binary_fun_sig num_ty bool_ty);
 
-   ("=", binary_fun_sig alpha bool_ty);
+   ("==", binary_fun_sig alpha bool_ty);
 
-   ("#f", bool_ty);
-   ("#t", bool_ty);
-   ("null", alpha_list);
+   ("false", bool_ty);
+   ("true", bool_ty);
+   ("nil", alpha_list);
 
    ("cons", funtype_of [alpha; alpha_list] alpha_list);
    ("car", unary_fun_sig alpha_list alpha);
@@ -148,7 +148,7 @@ let prim_gamma =
     empty_tyenv
     prim_sigs
 
-let nanoml_basis = "
+let myth_basis = "
 (check-principal-type list1 (forall 'a ('a -> (list 'a))))
 (define list1 (x) (cons x '()))
 
