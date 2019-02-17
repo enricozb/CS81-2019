@@ -55,6 +55,7 @@ type con = ConEq of ml_type * ml_type | ConAnd of con * con | ConTrivial
 val render_con : con -> string
 val free_tyvars_con : con -> Env.StringSet.t
 val subst_con : ml_type Env.StringMap.t -> con -> con
+val con_eq_tys : ml_type list -> con
 val con_join : con list -> con
 val con_solve : Loc.loc -> con -> ml_type Env.StringMap.t
 val ty_as_general_as : Loc.loc -> type_scheme -> type_scheme -> bool

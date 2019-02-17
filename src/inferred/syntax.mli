@@ -1,7 +1,8 @@
 val error : Loc.loc -> string -> 'a
 
 type expr =
-    Literal of value
+  | Literal of value
+  | List of annotated_expr list
   | Var of string
   | If of annotated_expr * annotated_expr * annotated_expr
   | Begin of annotated_expr list
@@ -12,11 +13,12 @@ and let_kind = Let | LetRec | LetStar
 and lambda = string list * annotated_expr
 and annotated_expr = Loc.loc * expr
 and value =
-    Nil
+  | Nil
   | Bool of bool
   | Num of int
   | Sym of string
   | Pair of value * value
+  | ListVal of value list
   | Closure of lambda * (unit -> value Env.env)
   | Primitive of primop
   | Ref of value ref

@@ -5,6 +5,7 @@ type name = string
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * int
+  | List of Loc.loc * (ast list)
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * name * ast)
@@ -33,8 +34,10 @@ let rec string_of_ast_list lst sep =
 and string_of_ast = function
   | Name (_, s) -> s
   | Num (_, i) -> string_of_int i
+  | List (_, exprs) ->
+      "[" ^ string_of_ast_list exprs ", " ^ "]"
   | Call (_, expr, params) ->
-      string_of_ast expr ^ "(" ^ (string_of_ast_list params ",") ^ ")"
+      string_of_ast expr ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
   | Lambda (_, params, stmt) ->
       "(" ^ string_of_str_list params ", " ^ ") -> " ^ string_of_ast stmt
   | If (_, expr, true_body, false_body) ->
@@ -52,6 +55,7 @@ let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
 let loc_of_ast = function
   | Name (l, _)
   | Num (l, _)
+  | List (l, _)
   | Call (l, _, _)
   | Lambda (l, _, _)
   | If (l, _, _, _)

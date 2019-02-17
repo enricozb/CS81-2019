@@ -1,4 +1,4 @@
-NAME = nano_ml
+NAME = myth
 INCS = repl/*.cmi
 LIBS = repl.cma
 LIBDIR = repl
@@ -7,8 +7,8 @@ FLAGS = -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
 SRC = error env type syntax basis eval
 
 MLI = $(patsubst %, %.mli, ${SRC})
-ML  = $(patsubst %, %.ml , ${SRC}) nano_ml.ml
-CMO = $(patsubst %, %.cmo, ${SRC}) nano_ml.cmo
+ML  = $(patsubst %, %.ml , ${SRC}) myth.ml
+CMO = $(patsubst %, %.cmo, ${SRC}) myth.cmo
 
 default: compile
 

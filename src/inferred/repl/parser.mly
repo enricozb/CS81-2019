@@ -171,8 +171,11 @@ atom_expr:
 atom:
   | LPAREN expr RPAREN      { $2 }
   | NAME                    { Ast.Name (fst $1, snd $1) }
-  (* TODO change to literal when adding lists *)
-  | NUMBER       { Ast.Num (fst $1, snd $1) }
+  | literal                 { $1 }
+
+literal:
+  | NUMBER                        { Ast.Num (fst $1, snd $1) }
+  | LBRACK expr_list_inner RBRACK { Ast.List (Loc.span $1 $3, $2) }
 
 lambda:
   | name_list MAPSTO expr {

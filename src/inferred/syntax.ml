@@ -5,6 +5,8 @@ open Error
 let error = Error.syntax_err
 
 type expr = Literal of value
+          (* Not a literal... should be *)
+          | List of annotated_expr list
           | Var of string
           | If of annotated_expr * annotated_expr * annotated_expr
           | Begin of annotated_expr list
@@ -23,6 +25,7 @@ and value = Nil
           | Num of int
           | Sym of string
           | Pair of value * value
+          | ListVal of value list
           | Closure of lambda * (unit -> value env)
           | Primitive of primop
           | Ref of value ref
@@ -39,12 +42,14 @@ let eq_val a b = match (a, b) with
 
 let rec render_val = function
   | Nil -> "'()"
-  | Bool b -> if b then "#t" else "#f"
+  | Bool b -> if b then "true" else "false"
   | Num i -> string_of_int i
   | Sym s -> s
    (* How should we render pairs versus lists? *)
   | Pair (a, b) ->
     "'(" ^ render_pair a b ^ ")"
+  | ListVal vals ->
+    "[" ^ render_list_vals vals ^ "]"
   | Closure _ -> "<closure>"
   | Primitive _ -> "<primitive>"
   | Ref r -> "ref " ^ (render_val !r)
@@ -54,6 +59,11 @@ and render_pair a =
     | Nil -> a
     | Pair (b, c) -> a ^ " " ^ render_pair b c
     | other -> a ^ " . " ^ render_val other
+
+and render_list_vals = function
+  | [] -> ""
+  | [x] -> render_val x
+  | x :: xs -> render_val x ^ ", " ^ render_list_vals xs
 
 type def = Val of string * annotated_expr
          | ValRec of string * annotated_expr
@@ -71,6 +81,7 @@ and annotated_def = Loc.loc * def
 let rec parse_expr = function
   | Ast.Name (l, name) -> (l, Var name)
   | Ast.Num (l, i) -> (l, Literal (Num i))
+  | Ast.List (l, vals) -> (l, List (parse_expr_list vals))
   | Ast.Lambda (l, params, expr) -> (l, Lambda (params, parse_expr expr))
   | Ast.Call (l, func, params) ->
       (l, Call (parse_expr func, parse_expr_list params))

@@ -168,6 +168,12 @@ let rec subst_con theta = function
   | ConAnd (c, c') -> ConAnd (subst_con theta c, subst_con theta c')
   | ConTrivial -> ConTrivial
 
+let rec con_eq_tys = function
+  | [] -> ConTrivial
+  | [ty] -> ConTrivial
+  (* ty1 = ty2 AND equate (ty2 :: tys) *)
+  | ty1 :: ty2 :: tys -> ConAnd (ConEq (ty1, ty2), con_eq_tys (ty2 :: tys))
+
 let rec con_join = function
   | [] -> ConTrivial
   | [c] -> c

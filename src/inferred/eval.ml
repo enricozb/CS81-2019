@@ -13,6 +13,19 @@ let rec typecheck_expr gamma (l, expr) = match expr with
 
   | Var v -> (fresh_tyenv (tyenv_find l gamma v), ConTrivial)
 
+  | List exprs -> begin match exprs with
+    | [] -> (list_ty (fresh_tyvar ()), ConTrivial)
+    | exprs ->
+      (* get types and constraints for each element *)
+      let (types, constraints) =
+        List.split @@
+          List.map (typecheck_expr gamma) exprs
+      in
+      (* equate all of the elements of the list *)
+      let con = con_eq_tys types in
+      (list_ty (List.nth types 0), con_join (con :: constraints))
+    end
+
   | If (e1, e2, e3) ->
     let (t1, c1) = typecheck_expr gamma e1
     and (t2, c2) = typecheck_expr gamma e2
@@ -125,6 +138,8 @@ and typecheck_literal l gamma = function
     in
       (t2, con_join [c1; c2; ConEq(list_ty t1, t2)])
 
+  | ListVal vals -> failwith "list literals are only results"
+
   | Closure ((params, body), _) ->
     let param_tys = List.map fresh_tyvar params
     and (retty, c) = typecheck_expr gamma body in
@@ -171,6 +186,10 @@ let rec eval_expr env (l, expr) = match expr with
   | Literal v -> v
 
   | Var v -> find l env v
+
+  | List exprs ->
+      (* TODO: these should be evaluated in sequence folding `env` with it *)
+      ListVal (List.map (eval_expr env) exprs)
 
   | If (cond, t, f) ->
     if truthy l (eval_expr env cond) then
