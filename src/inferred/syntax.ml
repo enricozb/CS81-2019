@@ -97,12 +97,15 @@ and parse_expr_list = function
 
 (* to turn Ast.Bind into LetX *)
 and parse_suite suite =
-  let suite_loc =
-    Loc.span
-      (Ast.loc_of_ast (List.nth suite 0))
-      (Ast.loc_of_ast (List.nth suite (List.length suite - 1)))
-  in
-  (suite_loc, Begin (parse_inner_suite suite))
+  if suite == [] then
+    failwith "Empty body or useless let expression"
+  else
+    let suite_loc =
+      Loc.span
+        (Ast.loc_of_ast (List.nth suite 0))
+        (Ast.loc_of_ast (List.nth suite (List.length suite - 1)))
+    in
+    (suite_loc, Begin (parse_inner_suite suite))
 
 and parse_inner_suite = function
   | [] -> []
