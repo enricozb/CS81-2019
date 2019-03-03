@@ -12,6 +12,13 @@ and tyvar =
 
 val string_of_type : ty -> string
 
-val typecheck : ty Env.env -> Ast.ast -> ty Env.env * ty
-val unify_error : Loc.loc -> ty -> ty -> 'a
+val gen_var_ty : ty
+val none_ty : ty
+val bool_ty : ty
+val int_ty : ty
+val list_gen_ty : ty
+val list_ty : ty -> ty
+val fun_ty : ty list -> ty -> ty
+
+val typecheck : ?level:level -> ty Env.env -> Ast.ast -> ty Env.env * ty
 

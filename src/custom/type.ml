@@ -12,10 +12,11 @@ and tyvar =
   | Unbound of id * level
   | Generic of id
 
+
 let rec string_of_type = function
   | TyVar {contents = Generic id} -> "'" ^ id
-  | TyVar {contents = Unbound (id, _)} -> "~" ^ id
-  | TyVar {contents = Link ty} -> string_of_type ty
+  | TyVar {contents = Unbound (id, level)} -> "~" ^ id ^ "." ^ (string_of_int level)
+  | TyVar {contents = Link ty} -> "&" ^ string_of_type ty
   | TyCon (id, []) -> id
   | TyCon (id, param_tys) ->
       (* TODO : implement this garbage *)
@@ -57,18 +58,19 @@ and fresh_tyvar level _ =
   fresh_counter := !fresh_counter + 1;
   TyVar {contents = Unbound ("T" ^ string_of_int !fresh_counter, level)}
 
+
 (* common types *)
+let gen_var_ty = TyVar {contents = Generic "A"}
+let none_ty = TyCon ("None", [])
+let bool_ty = TyCon ("Bool", [])
 let int_ty = TyCon ("Int", [])
+let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
 let fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 
+
 (* ---- UNIFICATION ---- *)
 (* to prevent mutually recursive modules between Error & Type ... *)
-let unify_error l ty1 ty2 =
-  Error.error l (TypeError
-     ("Cannot unify types " ^ (string_of_type ty1) ^
-      " and " ^ (string_of_type ty2) ^ "."))
-
 let rec unify loc ty1 ty2 =
   let unify = unify loc in
   if ty1 == ty2 then
@@ -79,7 +81,7 @@ let rec unify loc ty1 ty2 =
         if name1 = name2 then
           List.iter2 unify ty_params1 ty_params2
         else
-          unify_error loc ty1 ty2
+          Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
 
     | TyVar {contents = Link ty1}, ty2
     | ty1, TyVar {contents = Link ty2} ->
@@ -98,7 +100,7 @@ let rec unify loc ty1 ty2 =
         unify ty_ret1 ty_ret2
 
     | (ty1, ty2) ->
-        unify_error loc ty1 ty2
+        Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
 
 and pairwise_unify loc tys = match tys with
   | [] -> ()
@@ -106,6 +108,7 @@ and pairwise_unify loc tys = match tys with
   | ty1 :: ty2 :: tys ->
       unify loc ty1 ty2;
       pairwise_unify loc (ty2 :: tys)
+
 
 (* ---- GENERALIZATION & INSTANTIATION ---- *)
 let rec generalize level ty =
@@ -138,7 +141,7 @@ let rec instantiate level ty =
 					tyvar
         end
 
-		| TyVar {contents = Unbound _} -> ty
+		| TyVar {contents = Unbound _} as ty -> ty
 
 		| TyCon (name, param_tys) ->
 				TyCon (name, List.map recurse param_tys)
@@ -150,14 +153,15 @@ let rec instantiate level ty =
 
 
 (* ---- TYPE-CHECKING ---- *)
-let rec typecheck ty_env ast =
-  let ty = infer 1 ty_env ast in
+let rec typecheck ?level:(level=1) ty_env ast =
+  let ty = infer level ty_env ast in
 
   match ast with
-    | Ast.Bind (l, id, _) ->
+    | Ast.Bind (l, id, _)
+    | Ast.Def (l, id, _, _) ->
         (Env.bind id ty ty_env, ty)
     | _ ->
-        (Env.bind "_" ty ty_env, ty)
+        (ty_env, ty)
 
 and infer level ty_env ast = match ast with
   | Ast.Name (l, id) -> instantiate level (Env.lookup l id ty_env)
@@ -181,9 +185,6 @@ and infer level ty_env ast = match ast with
       let ret_ty = infer level ty_env' ast in
       fun_ty param_tys ret_ty
 
-  | Ast.Bind (l, id, ast) ->
-      generalize level (infer (level + 1) ty_env ast)
-
   | Ast.Call (l, ast, param_asts) ->
       let t1 = infer level ty_env ast in
       (* TODO: for mutation, do not instantiate variables when recursing down
@@ -195,5 +196,44 @@ and infer level ty_env ast = match ast with
       unify l t1 (fun_ty param_tys ret_ty);
       ret_ty
 
+  | Ast.Bind (l, id, ast) ->
+      generalize level (infer (level + 1) ty_env ast)
+
+  (* TODO : i have literally no idea how to do this, i have no idea if
+    * this is correct at all... *)
+  | Ast.Def (l, name, params, suite) ->
+      let functype = fresh_tyvar (level + 1) () in
+      let param_tys = List.map (fresh_tyvar (level + 1)) params in
+      let ty_env' =
+        Env.bind_many (name :: params) (functype :: param_tys) ty_env in
+
+      let ret_ty = typecheck_suite (level + 1) ty_env' suite in
+
+      unify l functype (fun_ty param_tys ret_ty);
+
+      generalize level functype
+
   | _ -> failwith "Type.infer called on non-implemented Ast"
+
+(* TODO : potentially return the last ty_env if we want the modified scope *)
+and typecheck_suite level ty_env suite =
+  let current_level = ref level in
+  let rec recurse ty_env suite =
+    match suite with
+    | [] -> failwith "Type.typecheck_suite on empty suite"
+    | [ast] ->
+        let (_, ty) = typecheck ~level:!current_level ty_env ast in
+        ty
+
+    | (Ast.Bind _ as ast) :: asts
+    | (Ast.Def _ as ast) :: asts ->
+        let (ty_env, _) = typecheck ~level:!current_level ty_env ast in
+        incr current_level;
+        recurse ty_env asts
+
+    | ast :: asts ->
+        let (_, _) = typecheck ~level:!current_level ty_env ast in
+        recurse ty_env asts
+
+  in recurse ty_env suite
 

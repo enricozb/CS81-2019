@@ -12,6 +12,7 @@ type ast =
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (name list) * (ast list))
+  | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)
   | CheckError of (Loc.loc * ast)
@@ -49,6 +50,7 @@ and string_of_ast = function
       "def " ^ funcname ^ "(" ^ string_of_str_list params ", " ^ "): ..."
   | Import (_, name) ->
       "import " ^ name
+  | Suite (l, asts) -> failwith "Ast.string_of_ast on Ast.Suite"
 
 let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
 
@@ -62,6 +64,7 @@ let loc_of_ast = function
   | While (l, _, _)
   | Bind (l, _, _)
   | Def (l, _, _, _)
+  | Suite (l, _)
   | Import (l, _)
   | CheckExpect (l, _, _)
   | CheckError (l, _)

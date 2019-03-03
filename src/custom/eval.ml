@@ -28,6 +28,8 @@ let rec eval val_env = function
               let val_env' = Env.bind_many params param_values (env_fn ()) in
               let (_, value) = eval val_env' body_ast in
               (val_env, value)
+        | Value.Builtin primop ->
+           (val_env, primop param_values l)
         | _ -> Error.call_error l (Value.string_of_value fun_value)
       end
 
@@ -35,8 +37,19 @@ let rec eval val_env = function
       let (val_env, value) = eval val_env ast in
       (Env.bind id value val_env, value)
 
-  | _ -> failwith "This ast is not yet supported"
+  | Ast.Def (l, name, params, suite) ->
+      let rec closure () = Env.bind name lambda val_env
+      and lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure)
+      in
+      (closure (), lambda)
 
+  | Ast.Suite (l, []) -> failwith "Eval.evel on empty Ast.Suite"
+  | Ast.Suite (l, [ast]) -> eval val_env ast
+  | Ast.Suite (l, ast :: asts) ->
+      let (val_env, _) = eval val_env ast in
+      eval val_env (Ast.Suite (l, asts))
 
-
+  | _ ->
+      Printf.printf "This ast is not yet supported\n";
+      (val_env, Value.Int 0)
 

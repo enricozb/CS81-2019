@@ -19,6 +19,10 @@ _build/
 .DS_Store
 
 # Executables.
+src/annotated/myth
+src/custom/myth
+src/inferred/myth
+
 src/imp/imp
 src/nano_ml/nano_ml
 src/uscheme/uscheme

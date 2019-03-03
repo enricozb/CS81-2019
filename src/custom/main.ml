@@ -15,7 +15,7 @@ let rec repl_func ast (ty_env, val_env) =
 
 
 let () =
-  let (ty_env, val_env) = (Env.empty, Env.empty) in
+  let (ty_env, val_env) = (Basis.ty_env, Basis.val_env) in
   try
     Repl.repl repl_func (ty_env, val_env)
   with

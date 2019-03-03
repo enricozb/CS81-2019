@@ -25,3 +25,7 @@ let rec bind_many ids values env =
       bind_many ids values (bind id value env)
   | _ -> failwith "Env.bind_many different length lists"
 
+let bind_pairs bindings env =
+  let (ids, values) = List.split bindings in
+  bind_many ids values env
+
