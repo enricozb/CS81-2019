@@ -1,6 +1,9 @@
 # CS81 2019 - myth language attempt 1
 
 ## Resources
+- [Crux](https://github.com/cruxlang/)
+  - A very similar idea but for JavaScript. Supports mutability and seems
+    to nicely solve something like the value restriction.
 - [Crystal](https://crystal-lang.org/)
   - A similar idea. A type-safe Ruby-like language that compiles to C.
 - [Type-Systems](https://github.com/tomprimozic/type-systems)
