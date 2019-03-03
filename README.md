@@ -1,6 +1,7 @@
 # CS81 2019 - myth language attempt 1
 
 ## Resources
+### Other Languages & Repos
 - [Crux](https://github.com/cruxlang/)
   - A very similar idea but for JavaScript. Supports mutability and seems
     to nicely solve something like the value restriction.
@@ -10,6 +11,11 @@
   - Several type systems implemented im OCaml.
 - [Airtight](https://github.com/alehander42/Airtight)
   - A potentially useful toy language. Python 3 with hindley-milner.
+
+### Papers
+- [How OCaml type checker works](http://okmij.org/ftp/ML/generalization.html#introduction)
+  - useful for understanding generalization & use of levels for efficient
+    generalization
 
 ### Ideology
 We want it to write as closely to Python as possible. Something close to

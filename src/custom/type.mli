@@ -1,11 +1,12 @@
 type id = string
-
 type ty =
-  | TyVar of id
+  | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
 
-type constraints = (ty * ty) list
+and tyvar =
+  | Link of ty
+  | Unbound of id
 
 val string_of_type : ty -> string
 
