@@ -12,6 +12,7 @@ type ast =
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (name list) * (ast list))
+  | Return of (Loc.loc * ast)
   | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)
@@ -48,6 +49,8 @@ and string_of_ast = function
   | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
   | Def (_, funcname, params, stmts) ->
       "def " ^ funcname ^ "(" ^ string_of_str_list params ", " ^ "): ..."
+  | Return (_, ast) ->
+      "return " ^ (string_of_ast ast)
   | Import (_, name) ->
       "import " ^ name
   | Suite (l, asts) -> failwith "Ast.string_of_ast on Ast.Suite"
@@ -64,6 +67,7 @@ let loc_of_ast = function
   | While (l, _, _)
   | Bind (l, _, _)
   | Def (l, _, _, _)
+  | Return (l, _)
   | Suite (l, _)
   | Import (l, _)
   | CheckExpect (l, _, _)

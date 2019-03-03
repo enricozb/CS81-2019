@@ -6,6 +6,7 @@
     | ELSE l
     | WHILE l
     | DEF l
+    | RETURN l
     | CHECKEXPECT l
     | CHECKERROR l
     | CHECKTYPEERROR l
@@ -34,6 +35,7 @@
 %token <Loc.loc> IF ELSE
 %token <Loc.loc> WHILE
 %token <Loc.loc> DEF
+%token <Loc.loc> RETURN
 %token <Loc.loc> COLON
 %token <Loc.loc> EQUALS MAPSTO
 %token <Loc.loc> COMMA QUOTE
@@ -75,6 +77,7 @@ simple_stmt:
   | check_stmt NEWLINE      { $1 }
   | assign_stmt NEWLINE     { $1 }
   | import_stmt NEWLINE     { $1 }
+  | flow_stmt NEWLINE       { $1 }
 
 suite:
   | simple_stmt                     { [$1] }
@@ -113,6 +116,11 @@ assign_stmt:
 import_stmt:
   | IMPORT NAME {
     Ast.Import (Loc.span $1 (fst $2), snd $2)
+  }
+
+flow_stmt:
+  | RETURN expr {
+    Ast.Return (Loc.span $1 (Ast.loc_of_ast $2), $2)
   }
 
 compound_stmt:

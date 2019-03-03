@@ -10,6 +10,7 @@ type ast =
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (name list) * (ast list))
+  | Return of (Loc.loc * ast)
   | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)

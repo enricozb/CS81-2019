@@ -16,6 +16,7 @@
     | ELSE _ -> "else"
     | WHILE _ -> "while"
     | DEF _ -> "def"
+    | RETURN _ -> "return"
     | COLON _ -> ":"
     | QUOTE _ -> "'"
     | COMMA _ -> ","
@@ -45,6 +46,7 @@
     | "else" -> ELSE loc
     | "while" -> WHILE loc
     | "def" -> DEF loc
+    | "return" -> RETURN loc
     | id -> NAME (loc, id)
 
   let print_token t = Printf.printf "%s\n" (string_of_token t)
