@@ -8,3 +8,7 @@
 - Add proper lists (not pairs).
 - Write lexer/parser for custom concrete syntax
 
+## Questions
+- Why does `Value.Closure` need `(fun () -> val_env)`
+  instead of just `val_env`?
+

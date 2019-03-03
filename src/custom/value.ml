@@ -1,9 +1,10 @@
 type value =
   | Int of int
   | List of value list
-  | Lambda of lambda
+  | Lambda of lambda * closure
 
-and lambda = (value list) -> value
+and lambda = (string list) * Ast.ast
+and closure = unit -> value Env.env
 
 let rec string_of_list = function
   | [] -> ""
@@ -16,5 +17,5 @@ and string_of_value = function
   | Int i -> string_of_int i
   | List values -> "[" ^ string_of_list values ^ "]"
   (* TODO *)
-  | Lambda lambda -> "lambda ..."
+  | Lambda (lambda, closure) -> "<lambda>"
 
