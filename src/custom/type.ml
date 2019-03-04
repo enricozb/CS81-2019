@@ -185,6 +185,16 @@ and infer level ty_env ast = match ast with
       let ret_ty = infer level ty_env' ast in
       fun_ty param_tys ret_ty
 
+  | Ast.If (l, ast, suite1, suite2) ->
+      let test_ty = infer level ty_env ast in
+      let ret_ty1 = typecheck_suite level ty_env suite1 in
+      let ret_ty2 = typecheck_suite level ty_env suite2 in
+
+      unify l test_ty bool_ty;
+      unify l ret_ty1 ret_ty2;
+
+      ret_ty1
+
   | Ast.Call (l, ast, param_asts) ->
       let t1 = infer level ty_env ast in
       (* TODO: for mutation, do not instantiate variables when recursing down

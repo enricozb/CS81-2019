@@ -1,0 +1,21 @@
+def map(f, lst):
+  if len(lst) == 0:
+    []
+  else:
+    x = f(head(lst))
+    cons(x, map(f, tail(lst)))
+
+incr = (x) -> x + 1
+
+# checking basic usage
+check_expect map(incr, [1, 2, 3]), [2, 3, 4]
+check_expect map(incr, []), []
+
+x = [1, 2, 3]
+y = []
+
+check_expect map(incr, x), [2, 3, 4]
+check_expect map(incr, y), []
+check_expect x, [1, 2, 3]
+check_expect y, []
+

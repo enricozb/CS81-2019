@@ -12,6 +12,7 @@
     | CHECKTYPEERROR l
     | IMPORT l
     | COLON l
+    | DOT l
     | EQUALS l
     | MAPSTO l
     | COMMA l
@@ -36,7 +37,7 @@
 %token <Loc.loc> WHILE
 %token <Loc.loc> DEF
 %token <Loc.loc> RETURN
-%token <Loc.loc> COLON
+%token <Loc.loc> COLON DOT
 %token <Loc.loc> EQUALS MAPSTO
 %token <Loc.loc> COMMA QUOTE
 %token <Loc.loc> LANGLE RANGLE
@@ -114,8 +115,14 @@ assign_stmt:
   }
 
 import_stmt:
-  | IMPORT NAME {
+  | IMPORT import_name_list {
     Ast.Import (Loc.span $1 (fst $2), snd $2)
+  }
+
+import_name_list:
+  | NAME                      { $1 }
+  | NAME DOT import_name_list {
+    (Loc.span (fst $1) (fst $3), (snd $1) ^ "/" ^ (snd $3))
   }
 
 flow_stmt:

@@ -51,6 +51,21 @@ let len =
     Type.list_gen_ty
     (fun (List lst) -> Value.Int (List.length lst))
 
+let head =
+  unary_fun
+    Type.list_gen_ty
+    (fun (List lst) -> (List.hd lst))
+
+let tail =
+  unary_fun
+    Type.list_gen_ty
+    (fun (List lst) -> Value.List (List.tl lst))
+
+let cons =
+  binary_fun
+    Type.gen_var_ty Type.list_gen_ty
+    (fun x (List lst) -> (Value.List (x :: lst)))
+
 let print =
   unary_fun
     Type.list_gen_ty
@@ -58,6 +73,9 @@ let print =
 
 let val_env = Env.bind_pairs
   [("len", len);
+   ("head", head);
+   ("tail", tail);
+   ("cons", cons);
 
    ("+", num_num_to_num ( + ));
    ("-", num_num_to_num ( - ));
@@ -78,6 +96,9 @@ let val_env = Env.bind_pairs
 
 let ty_env = Env.bind_pairs
   [("len", Type.fun_ty [Type.list_gen_ty] Type.int_ty);
+   ("head", Type.fun_ty [Type.list_gen_ty] Type.gen_var_ty);
+   ("tail", Type.fun_ty [Type.list_gen_ty] Type.list_gen_ty);
+   ("cons", Type.fun_ty [Type.gen_var_ty; Type.list_gen_ty] Type.list_gen_ty);
 
    ("+", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
    ("-", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);

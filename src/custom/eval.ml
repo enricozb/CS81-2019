@@ -10,6 +10,15 @@ let rec eval val_env = function
   | Ast.Lambda (l, params, body_ast) ->
       (val_env, Value.Lambda ((params, body_ast), (fun () -> val_env)))
 
+  | Ast.If (l, test, suite1, suite2) ->
+      let (val_env, Value.Bool test_val) = eval val_env test in
+      if test_val then
+        let (_, value) = eval val_env (Ast.Suite (l, suite1)) in
+        (val_env, value)
+      else
+        let (_, value) = eval val_env (Ast.Suite (l, suite2)) in
+        (val_env, value)
+
   | Ast.Call (l, fun_ast, param_asts) ->
       let (val_envs, param_values) =
         List.split @@ List.map (eval val_env) param_asts in

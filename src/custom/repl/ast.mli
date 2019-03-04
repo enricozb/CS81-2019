@@ -17,6 +17,8 @@ type ast =
   | CheckError of (Loc.loc * ast)
   | CheckTypeError of (Loc.loc * ast)
 
+val string_of_ast : ast -> string
+
 val loc_of_ast : ast -> Loc.loc
 val loc_of_ast_list : ast list -> Loc.loc
 

@@ -17,6 +17,7 @@
     | WHILE _ -> "while"
     | DEF _ -> "def"
     | RETURN _ -> "return"
+    | DOT _ -> "."
     | COLON _ -> ":"
     | QUOTE _ -> "'"
     | COMMA _ -> ","
@@ -108,6 +109,7 @@ rule token filename = parse
   }
   | [' ']+ { token filename lexbuf }
   | ':' { COLON (make_loc filename lexbuf) }
+  | '.' { DOT (make_loc filename lexbuf) }
   | ',' { COMMA (make_loc filename lexbuf) }
   | ''' { QUOTE (make_loc filename lexbuf) }
   | ['a'-'z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {

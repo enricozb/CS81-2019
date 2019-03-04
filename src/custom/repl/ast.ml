@@ -55,6 +55,15 @@ and string_of_ast = function
       "import " ^ name
   | Suite (l, asts) -> failwith "Ast.string_of_ast on Ast.Suite"
 
+  | CheckExpect (l, ast1, ast2) ->
+      "check_expect " ^ string_of_ast ast1 ^ ", " ^ string_of_ast ast2
+
+  | CheckError (l, ast) ->
+      "check_error " ^ string_of_ast ast
+
+  | CheckTypeError (l, ast) ->
+      "check_type_error " ^ string_of_ast ast
+
 let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
 
 let loc_of_ast = function
