@@ -19,7 +19,6 @@ let rec string_of_type = function
   | TyVar {contents = Link ty} -> "&" ^ string_of_type ty
   | TyCon (id, []) -> id
   | TyCon (id, param_tys) ->
-      (* TODO : implement this garbage *)
       id ^ "<" ^ string_of_type_list param_tys ^ ">"
   | TyFun (param_tys, ret_ty) ->
       "{" ^ (string_of_type_list param_tys) ^ "} -> " ^ (string_of_type ret_ty)

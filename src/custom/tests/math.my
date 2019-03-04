@@ -1,0 +1,40 @@
+def max(x, y):
+  if x <= y:
+    y
+  else:
+    x
+
+def min(x, y):
+  if x <= y:
+    x
+  else:
+    y
+
+def maxlst(lst):
+  reduce(max, head(lst), tail(lst))
+
+def minlst(lst):
+  reduce(min, head(lst), tail(lst))
+
+check_expect max(1, 2), 2
+check_expect max(2, 1), 2
+check_expect min(1, 2), 1
+check_expect min(2, 1), 1
+
+check_expect maxlst([1, 2, 3, 4, 5]), 5
+check_expect maxlst([5, 4, 3, 2, 1]), 5
+check_expect maxlst([2, 4, 1, 5, 3]), 5
+check_expect minlst([1, 2, 3, 4, 5]), 1
+check_expect minlst([5, 4, 3, 2, 1]), 1
+check_expect minlst([2, 4, 1, 5, 3]), 1
+
+check_type_error max([], [])
+check_type_error max(1, [])
+check_type_error max([], 1)
+check_type_error min([], [])
+check_type_error min(1, [])
+check_type_error min([], 1)
+
+check_error minlst([])
+check_error maxlst([])
+

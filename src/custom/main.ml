@@ -67,7 +67,8 @@ let rec run quiet (ty_env, val_env) ast =
   | Ast.Import (l, name) ->
     let asts = Repl.parse_file (name ^ ".my") in
     let (ty_env, val_env) = List.fold_left (run true) (ty_env, val_env) asts in
-    print_tests_stats ();
+    if not quiet then
+      print_tests_stats ();
     (ty_env, val_env)
 
   | _ -> run_ast (ty_env, val_env) quiet ast
