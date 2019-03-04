@@ -115,7 +115,7 @@ rule token filename = parse
   | ['a'-'z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
     name (make_loc filename lexbuf) id
   }
-  | ['0'-'9']+ as num {
+  | ['-']?['0'-'9']+ as num {
     NUMBER ((make_loc filename lexbuf), (int_of_string num))
   }
   | ['('] {
