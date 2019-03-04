@@ -1,0 +1,65 @@
+def map(f, lst):
+  if len(lst) == 0:
+    []
+  else:
+    x = f(head(lst))
+    cons(x, map(f, tail(lst)))
+
+def reduce(f, start, lst):
+  if len(lst) == 0:
+    start
+  else:
+    x = head(lst)
+    y = f(start, x)
+    reduce(f, y, tail(lst))
+
+def filter(f, lst):
+  if len(lst) == 0:
+    []
+  else:
+    x = head(lst)
+    if f(x):
+      cons(x, filter(f, tail(lst)))
+    else:
+      filter(f, tail(lst))
+
+
+# ---- map tests ----
+incr = (x) -> x + 1
+
+check_expect map(incr, [1, 2, 3]), [2, 3, 4]
+check_expect map(incr, []), []
+
+x = [1, 2, 3]
+y = []
+
+check_expect map(incr, x), [2, 3, 4]
+check_expect map(incr, y), []
+check_expect x, [1, 2, 3]
+check_expect y, []
+
+
+# ---- filter tests ----
+
+geq_to = (n) -> (x) -> x >= n
+
+check_expect filter(geq_to(5), [5,2,4,8,3,9,4,6,4,2]), [5, 8, 9, 6]
+check_expect filter(geq_to(10), [5,2,4,8,3,9,4,6,4,2]), []
+check_expect filter(geq_to(10), [5,2,4,8,3,9,4,6,4,2]), []
+
+
+# ---- reduce tests ----
+def range(n):
+  if n == 0:
+    []
+  else:
+    cons(n, range(n - 1))
+
+
+factorial = (n) -> reduce((x, y) -> x * y, 1, range(n))
+
+check_expect reduce((x, y) -> x + y, 0, [1,2,3,4]), 10
+check_expect factorial(5), 120
+
+
+
