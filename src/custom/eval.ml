@@ -1,7 +1,7 @@
 let rec eval val_env = function
   | Ast.Name (l, id) -> (val_env, Env.lookup l id val_env)
 
-  | Ast.Num (l, i) -> (val_env, Value.Int i)
+  | Ast.Num (l, i) -> (val_env, Value.Int (Z.of_string i))
 
   | Ast.List (l, asts) ->
       let (val_envs, values) = List.split @@ List.map (eval val_env) asts in
@@ -60,5 +60,5 @@ let rec eval val_env = function
 
   | _ ->
       Printf.printf "Eval.eval: This ast is not yet supported\n";
-      (val_env, Value.Int 0)
+      (val_env, Value.None)
 

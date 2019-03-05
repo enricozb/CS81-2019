@@ -69,7 +69,6 @@ let fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 
 
 (* ---- UNIFICATION ---- *)
-(* to prevent mutually recursive modules between Error & Type ... *)
 let rec unify loc ty1 ty2 =
   let unify = unify loc in
   if ty1 == ty2 then

@@ -49,7 +49,7 @@ let num_num_to_bool f =
 let len =
   unary_fun
     Type.list_gen_ty
-    (fun (List lst) -> Value.Int (List.length lst))
+    (fun (List lst) -> Value.Int (Z.of_int (List.length lst)))
 
 let head =
   unary_fun
@@ -77,15 +77,15 @@ let val_env = Env.bind_pairs
    ("tail", tail);
    ("cons", cons);
 
-   ("+", num_num_to_num ( + ));
-   ("-", num_num_to_num ( - ));
-   ("*", num_num_to_num ( * ));
-   ("/", num_num_to_num ( / ));
+   ("+", num_num_to_num Z.( + ));
+   ("-", num_num_to_num Z.( - ));
+   ("*", num_num_to_num Z.( * ));
+   ("/", num_num_to_num Z.( / ));
 
-   ("==", num_num_to_bool (=));
-   ("<=", num_num_to_bool (<=));
-   (">=", num_num_to_bool (>=));
-   ("!=", num_num_to_bool (<>));
+   ("==", num_num_to_bool Z.equal);
+   ("<=", num_num_to_bool Z.leq);
+   (">=", num_num_to_bool Z.geq);
+   ("!=", num_num_to_bool (fun a b -> not (Z.equal a b)));
 
    ("false", Value.Bool false);
    ("true", Value.Bool true);

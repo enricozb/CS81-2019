@@ -4,7 +4,7 @@ type name = string
 
 type ast =
   | Name of Loc.loc * name
-  | Num of Loc.loc * int
+  | Num of Loc.loc * string
   | List of Loc.loc * (ast list)
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
@@ -35,7 +35,7 @@ let rec string_of_ast_list lst sep =
 
 and string_of_ast = function
   | Name (_, s) -> s
-  | Num (_, i) -> string_of_int i
+  | Num (_, i) -> i
   | List (_, exprs) ->
       "[" ^ string_of_ast_list exprs ", " ^ "]"
   | Call (_, expr, params) ->

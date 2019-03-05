@@ -7,7 +7,7 @@
 
   let string_of_token = function
     | NAME (_, s) -> s
-    | NUMBER (_, i) -> string_of_int i
+    | NUMBER (_, i) -> i
     | CHECKEXPECT _ -> "check_expect"
     | CHECKERROR _ -> "check_error"
     | CHECKTYPEERROR _ -> "check_type_error"
@@ -116,7 +116,7 @@ rule token filename = parse
     name (make_loc filename lexbuf) id
   }
   | ['-']?['0'-'9']+ as num {
-    NUMBER ((make_loc filename lexbuf), (int_of_string num))
+    NUMBER ((make_loc filename lexbuf), num)
   }
   | ['('] {
     incr paren_count;

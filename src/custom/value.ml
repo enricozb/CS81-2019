@@ -1,7 +1,7 @@
 type value =
   | None
   | Bool of bool
-  | Int of int
+  | Int of Z.t
   | List of value list
   | Lambda of lambda * closure
   | Builtin of primop
@@ -20,7 +20,7 @@ let rec string_of_list = function
 and string_of_value = function
   | None -> "none"
   | Bool b -> string_of_bool b
-  | Int i -> string_of_int i
+  | Int i -> Z.to_string i
   | List values -> "[" ^ string_of_list values ^ "]"
   (* TODO *)
   | Lambda (lambda, closure) -> "<lambda>"

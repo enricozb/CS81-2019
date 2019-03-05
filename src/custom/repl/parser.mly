@@ -30,7 +30,7 @@
 %}
 
 %token <Loc.loc * string> NAME
-%token <Loc.loc * int> NUMBER
+%token <Loc.loc * string> NUMBER
 %token <Loc.loc> CHECKEXPECT CHECKERROR CHECKTYPEERROR
 %token <Loc.loc> IMPORT
 %token <Loc.loc> IF ELSE

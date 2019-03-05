@@ -1,7 +1,7 @@
 type value =
   | None
   | Bool of bool
-  | Int of int
+  | Int of Z.t
   | List of value list
   | Lambda of lambda * closure
   | Builtin of primop

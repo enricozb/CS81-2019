@@ -2,7 +2,7 @@ type name = string
 
 type ast =
   | Name of Loc.loc * name
-  | Num of Loc.loc * int
+  | Num of Loc.loc * string
   | List of Loc.loc * (ast list)
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
