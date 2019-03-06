@@ -41,6 +41,24 @@ let num_num_to_num f =
     Type.int_ty Type.int_ty
     (fun (Value.Int a) (Value.Int b) -> Value.Int (f a b))
 
+let num_int_to_num f =
+  binary_fun
+    Type.int_ty Type.int_ty
+    (fun (Value.Int a) (Value.Int b) ->
+      try
+        Value.Int (f a (Z.to_int b))
+      with
+        Z.Overflow ->
+          (* TODO: change loc ASAP *)
+          Error.runtime_error
+          ({filename = "none";
+            start_line = -1;
+            start_char = -1;
+            end_line   = -1;
+            end_char   = -1 })
+          "exponent too large"
+    )
+
 let num_num_to_bool f =
   binary_fun
     Type.int_ty Type.int_ty
@@ -81,6 +99,7 @@ let val_env = Env.bind_pairs
    ("-", num_num_to_num Z.( - ));
    ("*", num_num_to_num Z.( * ));
    ("/", num_num_to_num Z.( / ));
+   ("^", num_int_to_num Z.( ** ));
 
    ("==", num_num_to_bool Z.equal);
    ("<=", num_num_to_bool Z.leq);
@@ -102,8 +121,9 @@ let ty_env = Env.bind_pairs
 
    ("+", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
    ("-", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
-   ("/", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
    ("*", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
+   ("/", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
+   ("^", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
 
    ("==", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
    ("<=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);

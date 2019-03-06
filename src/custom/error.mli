@@ -1,10 +1,12 @@
 type error =
+  | RuntimeError of string
   | NameError of string
   | TypeError of string
 
 exception MythError of Loc.loc * error
 
 val error : Loc.loc -> error -> 'a
+val runtime_error : Loc.loc -> string -> 'a
 val name_error : Loc.loc -> string -> 'a
 val type_error : Loc.loc -> string -> 'a
 val type_mismatch_error : Loc.loc ->

@@ -71,7 +71,11 @@ let rec run quiet (ty_env, val_env) ast =
       print_tests_stats ();
     (ty_env, val_env)
 
-  | _ -> run_ast (ty_env, val_env) quiet ast
+  | Ast.Bind _ | Ast.Def _ ->
+      run_ast (ty_env, val_env) quiet ast
+
+  | _ ->
+      run_ast (ty_env, val_env) quiet (Ast.Bind (Ast.loc_of_ast ast, "_", ast))
 
 
 let rec repl_func ast (ty_env, val_env) =

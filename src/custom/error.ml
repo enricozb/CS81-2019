@@ -1,10 +1,12 @@
 type error =
+  | RuntimeError of string
   | NameError of string
   | TypeError of string
 
 exception MythError of Loc.loc * error
 
 let string_of_error l = function
+  | RuntimeError s -> (Loc.string_of_loc_short l) ^ "; RuntimeError: '" ^ s ^ "'"
   | NameError s -> (Loc.string_of_loc_short l) ^ "; NameError: '" ^ s ^ "'"
   | TypeError s -> (Loc.string_of_loc_short l) ^ "; TypeError: '" ^ s ^ "'"
 
@@ -12,6 +14,8 @@ let print_error l error = Printf.printf "%s\n" (string_of_error l error)
 
 (* Raise Error functions *)
 let error l err = raise (MythError (l, err))
+
+let runtime_error l s = error l (RuntimeError s)
 
 let name_error l id = error l (NameError id)
 
