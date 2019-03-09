@@ -39,50 +39,71 @@ let binary_fun ty1 ty2 f = Value.Builtin (fun vals loc ->
 let num_num_to_num f =
   binary_fun
     Type.int_ty Type.int_ty
-    (fun (Value.Int a) (Value.Int b) -> Value.Int (f a b))
+    (fun a b -> match a, b with
+      | (Value.Int a, Value.Int b) -> Value.Int (f a b)
+      | _ -> failwith "Runtime type error"
+    )
 
 let num_int_to_num f =
   binary_fun
     Type.int_ty Type.int_ty
-    (fun (Value.Int a) (Value.Int b) ->
-      try
-        Value.Int (f a (Z.to_int b))
-      with
-        Z.Overflow ->
-          (* TODO: change loc ASAP *)
-          Error.runtime_error
-          ({filename = "none";
-            start_line = -1;
-            start_char = -1;
-            end_line   = -1;
-            end_char   = -1 })
-          "exponent too large"
+    (fun a b -> match a, b with
+      | (Value.Int a, Value.Int b) ->
+        begin try
+          Value.Int (f a (Z.to_int b))
+        with
+          Z.Overflow ->
+            (* TODO: change loc ASAP *)
+            Error.runtime_error
+            ({filename = "none";
+              start_line = -1;
+              start_char = -1;
+              end_line   = -1;
+              end_char   = -1 })
+            "exponent too large"
+        end
+      | _ -> failwith "Runtime type error"
     )
 
 let num_num_to_bool f =
   binary_fun
     Type.int_ty Type.int_ty
-    (fun (Value.Int a) (Value.Int b) -> Value.Bool (f a b))
+    (fun a b -> match a, b with
+      | (Value.Int a, Value.Int b) -> Value.Bool (f a b)
+      | _ -> failwith "Runtime type error"
+    )
 
 let len =
   unary_fun
     Type.list_gen_ty
-    (fun (List lst) -> Value.Int (Z.of_int (List.length lst)))
+    (fun lst -> match lst with
+      | (List lst) -> Value.Int (Z.of_int (List.length lst))
+      | _ -> failwith "Runtime type error"
+    )
 
 let head =
   unary_fun
     Type.list_gen_ty
-    (fun (List lst) -> (List.hd lst))
+    (fun lst -> match lst with
+      | (Value.List lst) -> (List.hd lst)
+      | _ -> failwith "Runtime type error"
+    )
 
 let tail =
   unary_fun
     Type.list_gen_ty
-    (fun (List lst) -> Value.List (List.tl lst))
+    (fun lst -> match lst with
+      | (Value.List lst) -> Value.List (List.tl lst)
+      | _ -> failwith "Runtime type error"
+    )
 
 let cons =
   binary_fun
     Type.gen_var_ty Type.list_gen_ty
-    (fun x (List lst) -> (Value.List (x :: lst)))
+    (fun x lst -> match x, lst with
+      | x, (Value.List lst) -> (Value.List (x :: lst))
+      | _ -> failwith "Runtime type error"
+    )
 
 let print =
   unary_fun

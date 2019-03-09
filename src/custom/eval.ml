@@ -11,7 +11,12 @@ let rec eval val_env = function
       (val_env, Value.Lambda ((params, body_ast), (fun () -> val_env)))
 
   | Ast.If (l, test, suite1, suite2) ->
-      let (val_env, Value.Bool test_val) = eval val_env test in
+      let (val_env, test_val) = eval val_env test in
+      let test_val = begin match test_val with
+        | Value.Bool b -> b
+        | _ -> failwith "Runtime type error"
+      end in
+
       if test_val then
         let (_, value) = eval val_env (Ast.Suite (l, suite1)) in
         (val_env, value)
