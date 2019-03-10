@@ -14,7 +14,7 @@ let run_ty_val (ty_env, val_env) ast =
 
 
 (* handles non-checks and non-imports, does not return type nor value *)
-let run_ast ty_val_env quiet ast =
+let run_ast ty_val_env ?(quiet=false) ast =
   let (ty_env, val_env, ty, value) = run_ty_val ty_val_env ast in
   if not quiet then
     Printf.printf "%s : %s\n"
@@ -22,7 +22,7 @@ let run_ast ty_val_env quiet ast =
   (ty_env, val_env)
 
 
-let run_check (ty_env, val_env) quiet ast =
+let run_check (ty_env, val_env) ast =
   incr total_tests;
   let success = match ast with
   | Ast.CheckExpect (l, ast1, ast2) ->
@@ -52,35 +52,33 @@ let run_check (ty_env, val_env) quiet ast =
   if success then
     incr passed_tests;
 
-  if not quiet then begin
-    if not success then
-      Printf.printf "%s\n" ("failed: " ^ Ast.string_of_ast ast);
-    print_tests_stats ()
-  end;
+  if not success then
+    Printf.printf "%s\n" ("failed: " ^ Ast.string_of_ast ast);
   (ty_env, val_env)
 
-let rec run quiet (ty_env, val_env) ast =
+let rec run ?(quiet=false) (ty_env, val_env) ast =
   match ast with
   | Ast.CheckExpect _ | Ast.CheckError _ | Ast.CheckTypeError _ ->
-      run_check (ty_env, val_env) quiet ast
+      run_check (ty_env, val_env) ast
 
   | Ast.Import (l, name) ->
     let asts = Repl.parse_file (name ^ ".my") in
-    let (ty_env, val_env) = List.fold_left (run true) (ty_env, val_env) asts in
+    let (ty_env, val_env) = List.fold_left (run ~quiet:true) (ty_env, val_env) asts in
     if not quiet then
       print_tests_stats ();
     (ty_env, val_env)
 
   | Ast.Bind _ | Ast.Def _ ->
-      run_ast (ty_env, val_env) quiet ast
+      run_ast (ty_env, val_env) ~quiet:quiet ast
 
   | _ ->
-      run_ast (ty_env, val_env) quiet (Ast.Bind (Ast.loc_of_ast ast, "_", ast))
+      run_ast (ty_env, val_env) ~quiet:quiet
+        (Ast.Bind (Ast.loc_of_ast ast, "_", ast))
 
 
 let rec repl_func ast (ty_env, val_env) =
   try
-    run false (ty_env, val_env) ast
+    run (ty_env, val_env) ast
   with
     Error.MythError (l, e) ->
       Error.print_error l e;
