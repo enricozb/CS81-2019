@@ -11,7 +11,7 @@ val string_of_token : Parser.token -> string
 val print_token : Parser.token -> unit
 
 (* Lexing *)
-exception SyntaxError of string
+exception SyntaxError of Loc.loc
 
 val token : string -> Lexing.lexbuf -> Parser.token
 val newline : string -> Lexing.lexbuf -> Parser.token

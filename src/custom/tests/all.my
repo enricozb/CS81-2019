@@ -2,4 +2,5 @@ import tests.functools
 import tests.math
 import tests.list
 import tests.types
+import tests.if_and_return
 

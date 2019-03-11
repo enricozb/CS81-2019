@@ -78,19 +78,23 @@ let read_line_with_prompt (prompt : string) =
   (read_line ()) ^ "\n"
 
 let parse_repl () =
-  let filename = "__main__" in
+  let filename = "__repl__" in
   let rec loop_until_parse str =
     Lexer.reset_state ();
     let lexbuf = Lexing.from_string str in
-      try
-        loop
-          (lexfun_cache filename)
-          (*(print_wrap @@ lexfun_cache filename)*)
-          lexbuf
-          (Parser.Incremental.single_input lexbuf.lex_curr_p)
-      with ParseIncomplete -> begin
+    try
+      loop
+        (lexfun_cache filename)
+        (*(print_wrap @@ lexfun_cache filename)*)
+        lexbuf
+        (Parser.Incremental.single_input lexbuf.lex_curr_p)
+    with
+      | ParseIncomplete -> begin
         loop_until_parse (str ^ (read_line_with_prompt "... "))
       end
+      | Lexer.SyntaxError loc ->
+        let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
+        raise (ParsingError loc)
   in begin
     loop_until_parse (read_line_with_prompt ">>> ")
   end

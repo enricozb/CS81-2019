@@ -51,7 +51,7 @@
 
   exception Exit
   exception Eof
-  exception SyntaxError of string
+  exception SyntaxError of Loc.loc
 
   let line_number = ref 1
   let paren_count = ref 0
@@ -93,7 +93,7 @@
             incr dedent_count;
             ignore (Stack.pop space_stack);
         done;
-        raise (SyntaxError "invalid deindent")
+        raise (SyntaxError loc)
       with Exit -> `Token (DEINDENT (loc, !dedent_count))
 
   let make_loc filename lexbuf =
@@ -136,12 +136,13 @@ rule token filename = parse
   }
   | ['['] { LBRACK (make_loc filename lexbuf) }
   | [']'] { RBRACK (make_loc filename lexbuf) }
-  | operators+ as op {
+  | "!=" | operators+ as op {
     match op with
     (* These are to prevent <= and >= from becoming assignment operators *)
-    | "<=" -> OPERATOR ((make_loc filename lexbuf), "<=")
-    | ">=" -> OPERATOR ((make_loc filename lexbuf), ">=")
-    | "==" -> OPERATOR ((make_loc filename lexbuf), "==")
+    | "!=" -> OPERATOR ((make_loc filename lexbuf), op)
+    | "<=" -> OPERATOR ((make_loc filename lexbuf), op)
+    | ">=" -> OPERATOR ((make_loc filename lexbuf), op)
+    | "==" -> OPERATOR ((make_loc filename lexbuf), op)
     | "=" -> EQUALS (make_loc filename lexbuf)
     | "->" -> MAPSTO (make_loc filename lexbuf)
     | op ->
@@ -151,7 +152,7 @@ rule token filename = parse
         else
           OPERATOR ((make_loc filename lexbuf), op)
   }
-  | _ as t { raise (SyntaxError ("unexpected token " ^ Char.escaped t)) }
+  | _ { raise (SyntaxError (make_loc filename lexbuf)) }
   | eof { EOF }
 
 and newline filename = parse

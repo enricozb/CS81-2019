@@ -1,3 +1,4 @@
+# simple min/max checks
 def max(x, y):
   if x <= y:
     return y
@@ -37,4 +38,37 @@ check_type_error min([], 1)
 
 check_error minlst([])
 check_error maxlst([])
+
+# checking numeric operators
+check_expect 1 + 1, 2
+check_expect 1 - 2, -1
+check_expect 2 * 3, 6
+check_expect 12 / 3, 4
+check_expect 2 ^ 4, 16
+
+# checking comparison operators
+check_expect 1 == 1, true
+check_expect 1 == 2, false
+check_expect 2 == 1, false
+
+check_expect 1 != 1, false
+check_expect 2 != 1, true
+check_expect 1 != 2, true
+
+check_expect 1 <= 1, true
+check_expect 2 <= 1, false
+check_expect 1 <= 2, true
+
+check_expect 1 >= 1, true
+check_expect 2 >= 1, true
+check_expect 1 >= 2, false
+
+check_expect 1 > 1, false
+check_expect 2 > 1, true
+check_expect 1 > 2, false
+
+check_expect 1 < 1, false
+check_expect 2 < 1, false
+check_expect 1 < 2, true
+
 

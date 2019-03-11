@@ -137,6 +137,10 @@ compound_stmt:
 
 (* TODO disallow stuff like `if True: x else: y` in one line *)
 if_stmt:
+  | IF expr COLON suite {
+    Ast.If (Loc.span $1 (Ast.loc_of_ast_list $4),
+            $2, $4, [])
+  }
   | IF expr COLON suite ELSE COLON suite {
     Ast.If (Loc.span $1 (Ast.loc_of_ast_list $7),
             $2, $4, $7)
