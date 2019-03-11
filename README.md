@@ -12,7 +12,9 @@
 - [Airtight](https://github.com/alehander42/Airtight)
   - A potentially useful toy language. Python 3 with hindley-milner.
 
-### Papers
+### Papers & Readings
+- [MLsub - Hindley Milner + Subtyping](https://www.cl.cam.ac.uk/~sd601/mlsub/)
+- [Typeclasses & Hindley Milner](https://boxbase.org/entries/2018/apr/16/typeclasses/)
 - [How OCaml type checker works](http://okmij.org/ftp/ML/generalization.html#introduction)
   - useful for understanding generalization & use of levels for efficient
     generalization
