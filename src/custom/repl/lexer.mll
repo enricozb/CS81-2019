@@ -35,9 +35,6 @@
     | DEINDENT (_, _) -> failwith "string_of_token on deindent"
     | EOF -> "EOF"
 
-  let make_loc filename lexbuf =
-    Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf)
-
   let name loc = function
     | "check_expect" -> CHECKEXPECT loc
     | "check_error" -> CHECKERROR loc
@@ -59,12 +56,20 @@
   let line_number = ref 1
   let paren_count = ref 0
 
+  let next_line lexbuf =
+    incr line_number;
+    let pos = lexbuf.lex_curr_p in
+    lexbuf.lex_curr_p <-
+      { pos with pos_bol = lexbuf.lex_curr_pos;
+                 pos_lnum = pos.pos_lnum + 1
+      }
+
   let space_stack = Stack.create ()
   let _ = Stack.push 0 space_stack
 
   let reset_state () =
-    paren_count := 0;
     state := CODE;
+    paren_count := 0;
     Stack.clear space_stack;
     Stack.push 0 space_stack
 
@@ -90,21 +95,24 @@
         done;
         raise (SyntaxError "invalid deindent")
       with Exit -> `Token (DEINDENT (loc, !dedent_count))
+
+  let make_loc filename lexbuf =
+    Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf)
 }
 
 let operators = ['.' '+' '-' '*' '/' '%' '<' '>' '=' '^']
 
 rule token filename = parse
   | ['#'] [^'\n']* ['\n'] {
+    next_line lexbuf;
     token filename lexbuf
   }
   | ['\n'] {
-    incr line_number;
+    next_line lexbuf;
     if !paren_count = 0 then begin
       state := RECENT_NEWLINE;
       NEWLINE (make_loc filename lexbuf)
-    end
-    else
+    end else
       token filename lexbuf
   }
   | [' ']+ { token filename lexbuf }
@@ -130,8 +138,6 @@ rule token filename = parse
   | [']'] { RBRACK (make_loc filename lexbuf) }
   | operators+ as op {
     match op with
-    | "<" -> LANGLE (make_loc filename lexbuf)
-    | ">" -> RANGLE (make_loc filename lexbuf)
     (* These are to prevent <= and >= from becoming assignment operators *)
     | "<=" -> OPERATOR ((make_loc filename lexbuf), "<=")
     | ">=" -> OPERATOR ((make_loc filename lexbuf), ">=")

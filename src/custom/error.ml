@@ -10,7 +10,10 @@ let string_of_error l = function
   | RuntimeError s -> (Loc.string_of_loc_short l) ^ "; RuntimeError: '" ^ s ^ "'"
   | NameError s -> (Loc.string_of_loc_short l) ^ "; NameError: '" ^ s ^ "'"
   | TypeError s -> (Loc.string_of_loc_short l) ^ "; TypeError: '" ^ s ^ "'"
-  | SyntaxError s -> (Loc.string_of_loc_short l) ^ "; SyntaxError: '" ^ s ^ "'"
+  | SyntaxError "" ->
+      (Loc.string_of_loc_short l) ^ "; SyntaxError"
+  | SyntaxError s ->
+      (Loc.string_of_loc_short l) ^ "; SyntaxError"
 
 let print_error l error = Printf.printf "%s\n" (string_of_error l error)
 

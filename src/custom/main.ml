@@ -76,9 +76,13 @@ let rec run ?(quiet=false) (ty_env, val_env) ast =
         (Ast.Bind (Ast.loc_of_ast ast, "_", ast))
 
 
-let rec repl_func ast (ty_env, val_env) =
+let rec repl_func ast_or_error (ty_env, val_env) =
   try
-    run (ty_env, val_env) ast
+    match ast_or_error with
+    | `Ast ast ->
+        run (ty_env, val_env) ast
+    | `ParsingError loc ->
+        Error.syntax_error loc ""
   with
     Error.MythError (l, e) ->
       Error.print_error l e;

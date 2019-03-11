@@ -125,6 +125,8 @@ let val_env = Env.bind_pairs
    ("==", num_num_to_bool Z.equal);
    ("<=", num_num_to_bool Z.leq);
    (">=", num_num_to_bool Z.geq);
+   ("<", num_num_to_bool Z.lt);
+   (">", num_num_to_bool Z.gt);
    ("!=", num_num_to_bool (fun a b -> not (Z.equal a b)));
 
    ("false", Value.Bool false);
@@ -149,6 +151,8 @@ let ty_env = Env.bind_pairs
    ("==", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
    ("<=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
    (">=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
+   ("<", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
+   (">", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
    ("!=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);
 
    ("false", Type.bool_ty);

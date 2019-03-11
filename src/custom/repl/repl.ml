@@ -18,12 +18,14 @@ let lexfun_cache (filename : string) =
     | [] ->
         match !Lexer.state with
         | Lexer.CODE -> Lexer.token filename lexbuf
-        | Lexer.RECENT_NEWLINE ->
-          (* Indents or dedents need to be preceded by newlines *)
-          match Lexer.newline filename lexbuf with
-          | DEINDENT (loc, n) ->
-              cache := (replicate (n - 1) (DEDENT loc)); (DEDENT loc)
-          | token -> token
+        | Lexer.RECENT_NEWLINE -> begin
+            match Lexer.newline filename lexbuf with
+            | DEINDENT (loc, n) -> begin
+                cache := (replicate (n - 1) (DEDENT loc));
+                (DEDENT loc)
+            end
+            | token -> token
+        end
 
 (* Prints tokens as they are produced *)
 let print_wrap lexfun =
@@ -34,7 +36,7 @@ let print_wrap lexfun =
 
 (* Taken from https://gitlab.inria.fr/fpottier/menhir/blob/master/demos/calc-incremental/calc.ml *)
 exception ParseIncomplete
-exception SyntaxError of int
+exception ParsingError of Loc.loc
 
 let rec loop
         lexer_rule
@@ -58,7 +60,8 @@ let rec loop
       let checkpoint = I.resume checkpoint in
       loop lexer_rule lexbuf checkpoint
   | I.HandlingError _env ->
-      raise (SyntaxError (Lexing.lexeme_start lexbuf))
+      let loc = Loc.get_loc "__repl__" (lexeme_start_p lexbuf) (lexeme lexbuf) in
+      raise (ParsingError loc)
   | I.Accepted ast ->
       ast
   | I.Rejected ->
@@ -82,7 +85,7 @@ let parse_repl () =
       try
         loop
           (lexfun_cache filename)
-          (* (print_wrap @@ lexfun_cache filename) *)
+          (*(print_wrap @@ lexfun_cache filename)*)
           lexbuf
           (Parser.Incremental.single_input lexbuf.lex_curr_p)
       with ParseIncomplete -> begin
@@ -93,23 +96,34 @@ let parse_repl () =
   end
 
 let parse_file (filename : string) =
+  Lexer.reset_state ();
   let lexbuf = Lexing.from_channel (open_in filename) in
-    Parser.file_input (lexfun_cache filename) lexbuf
+    try
+      Parser.file_input (lexfun_cache filename) lexbuf
+    with _ ->
+      let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
+      raise (ParsingError loc)
+
 
 let parse_lexbuf (name : string) lexbuf =
-    Parser.file_input (lexfun_cache name) lexbuf
+  Lexer.reset_state ();
+    try
+      Parser.file_input (lexfun_cache name) lexbuf
+    with _ ->
+      let loc = Loc.get_loc name (lexeme_start_p lexbuf) (lexeme lexbuf) in
+      raise (ParsingError loc)
 
-(* takes in a function that takes in the Ast read in and any auxilliary
- * data. Feeds in `aux` into f repeatedly after each parsing. *)
-let repl (f : Ast.ast -> 'a -> 'a) (aux : 'a) =
-	try
-    let aux = ref aux in
-    while true do
-      aux := f (parse_repl ()) (!aux)
-    done
-  with
-  | Lexer.SyntaxError msg ->
-      Printf.fprintf stderr "%s\n" msg
-  | End_of_file ->
-      exit 0
+(* takes in a function that takes in the (`Ast || `ParsingError) read in and
+ * any auxilliary data. Feeds in `aux` into f repeatedly after each parsing. *)
+let repl f (aux : 'a) =
+  let aux = ref aux in
+  while true do
+    try
+        aux := f (`Ast (parse_repl ())) (!aux)
+    with
+    | ParsingError loc ->
+        aux := f (`ParsingError loc) (!aux)
+    | End_of_file ->
+        exit 0
+  done
 

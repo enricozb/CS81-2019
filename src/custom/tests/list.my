@@ -10,6 +10,6 @@ def reverse(lst):
   return recurse([], lst)
 
 
-check_expect reverse([1,2,3]), [3,2,1]
+check_expect reverse([1, 2, 3]), [3, 2, 1]
 check_expect reverse([]), []
 
