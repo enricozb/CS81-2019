@@ -4,7 +4,7 @@ LIBS = repl.cma
 LIBDIR = repl
 FLAGS = -package zarith -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
 
-SRC = error env type value basis eval
+SRC = error env type value basis frame eval
 
 MLI = $(patsubst %, %.mli, ${SRC})
 ML  = $(patsubst %, %.ml , ${SRC}) main.ml

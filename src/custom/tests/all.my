@@ -1,3 +1,5 @@
 import tests.functools
 import tests.math
+import tests.list
+import tests.types
 

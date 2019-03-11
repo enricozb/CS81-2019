@@ -12,3 +12,5 @@ and primop = value list -> Loc.loc -> value
 
 val string_of_value : value -> string
 
+val truthy : Loc.loc -> value -> bool
+

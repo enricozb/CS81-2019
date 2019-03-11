@@ -33,6 +33,7 @@ let rec string_of_ast_list lst sep =
     | (el :: x) -> (string_of_ast el) ^ sep ^ (iter x)
   in iter lst
 
+(* TODO : change this to `to_string` *)
 and string_of_ast = function
   | Name (_, s) -> s
   | Num (_, i) -> i
@@ -53,7 +54,7 @@ and string_of_ast = function
       "return " ^ (string_of_ast ast)
   | Import (_, name) ->
       "import " ^ name
-  | Suite (l, asts) -> failwith "Ast.string_of_ast on Ast.Suite"
+  | Suite (l, asts) -> "<suite>"
 
   | CheckExpect (l, ast1, ast2) ->
       "check_expect " ^ string_of_ast ast1 ^ ", " ^ string_of_ast ast2

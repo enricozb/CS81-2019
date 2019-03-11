@@ -150,6 +150,28 @@ let rec instantiate level ty =
   recurse ty
 
 
+(* ---- SUITE FUNCTIONS ---- *)
+
+(* returns true if all branches of this suite return *)
+let rec suite_always_returns suite = match suite with
+  | [] -> false
+  | Ast.Return (_, ast) :: [] -> true
+  | Ast.Return (l, _) :: rest ->
+      Error.unreachable_code_error l
+
+  | Ast.If (l, _, suite1, suite2) :: rest ->
+      if suite_always_returns suite1 && suite_always_returns suite2 then
+        if rest = [] then
+          true
+        else
+          Error.unreachable_code_error l
+      else
+        suite_always_returns rest
+
+  | _ :: rest -> suite_always_returns rest
+
+
+
 (* ---- TYPE-CHECKING ---- *)
 let rec typecheck ?level:(level=1) ty_env ast =
   let ty = infer level ty_env ast in
@@ -185,13 +207,14 @@ and infer level ty_env ast = match ast with
 
   | Ast.If (l, ast, suite1, suite2) ->
       let test_ty = infer level ty_env ast in
-      let ret_ty1 = typecheck_suite level ty_env suite1 in
-      let ret_ty2 = typecheck_suite level ty_env suite2 in
+      let ret_tys1 = typecheck_suite level ty_env suite1 in
+      let ret_tys2 = typecheck_suite level ty_env suite2 in
+
+      if (ret_tys1, ret_tys2) <> ([], []) then
+        Error.return_outside_def l;
 
       unify l test_ty bool_ty;
-      unify l ret_ty1 ret_ty2;
-
-      ret_ty1
+      none_ty
 
   | Ast.Call (l, ast, param_asts) ->
       let t1 = infer level ty_env ast in
@@ -215,7 +238,17 @@ and infer level ty_env ast = match ast with
       let ty_env' =
         Env.bind_many (name :: params) (functype :: param_tys) ty_env in
 
-      let ret_ty = typecheck_suite (level + 1) ty_env' suite in
+      let ret_tys = typecheck_suite (level + 1) ty_env' suite in
+
+      if suite_always_returns suite then
+        pairwise_unify l ret_tys
+      else
+        pairwise_unify l (none_ty :: ret_tys);
+
+      let ret_ty = match ret_tys with
+        | [] -> none_ty
+        | ret_ty :: _ -> ret_ty
+      in
 
       unify l functype (fun_ty param_tys ret_ty);
 
@@ -226,22 +259,33 @@ and infer level ty_env ast = match ast with
 (* TODO : potentially return the last ty_env if we want the modified scope *)
 and typecheck_suite level ty_env suite =
   let current_level = ref level in
-  let rec recurse ty_env suite =
+  let rec recurse ty_env ret_tys suite =
     match suite with
-    | [] -> failwith "Type.typecheck_suite on empty suite"
-    | [ast] ->
-        let (_, ty) = typecheck ~level:!current_level ty_env ast in
-        ty
+    | [] -> ret_tys
 
-    | (Ast.Bind _ as ast) :: asts
-    | (Ast.Def _ as ast) :: asts ->
+    | Ast.Return (l, ast) :: [] ->
+        let (_, ty) = typecheck ~level:!current_level ty_env ast in
+        ty :: ret_tys
+    | Ast.Return (l, _) :: rest ->
+        Error.unreachable_code_error l
+
+    | Ast.If (l, test, suite1, suite2) :: rest ->
+      let test_ty = infer level ty_env test in
+      let ret_tys1 = typecheck_suite level ty_env suite1 in
+      let ret_tys2 = typecheck_suite level ty_env suite2 in
+
+      unify l test_ty bool_ty;
+      recurse ty_env (ret_tys1 @ ret_tys2) rest
+
+    | (Ast.Bind _ as ast) :: suite
+    | (Ast.Def _ as ast) :: suite ->
         let (ty_env, _) = typecheck ~level:!current_level ty_env ast in
         incr current_level;
-        recurse ty_env asts
+        recurse ty_env ret_tys suite
 
     | ast :: asts ->
         let (_, _) = typecheck ~level:!current_level ty_env ast in
-        recurse ty_env asts
+        recurse ty_env ret_tys asts
 
-  in recurse ty_env suite
+  in recurse ty_env [] suite
 

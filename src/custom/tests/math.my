@@ -1,20 +1,20 @@
 def max(x, y):
   if x <= y:
-    y
+    return y
   else:
-    x
+    return x
 
 def min(x, y):
   if x <= y:
-    x
+    return x
   else:
-    y
+    return y
 
 def maxlst(lst):
-  reduce(max, head(lst), tail(lst))
+  return reduce(max, head(lst), tail(lst))
 
 def minlst(lst):
-  reduce(min, head(lst), tail(lst))
+  return reduce(min, head(lst), tail(lst))
 
 check_expect max(1, 2), 2
 check_expect max(2, 1), 2

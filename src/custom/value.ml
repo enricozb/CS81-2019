@@ -26,3 +26,9 @@ and string_of_value = function
   | Lambda (lambda, closure) -> "<lambda>"
   | Builtin primop -> "<builtin>"
 
+let truthy l = function
+  | Bool b -> b
+  | value ->
+      Error.type_mismatch_error l
+                          ~expected: "Bool"
+                          ~provided: (string_of_value value)
