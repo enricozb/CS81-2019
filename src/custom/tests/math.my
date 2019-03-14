@@ -44,7 +44,15 @@ check_expect 1 + 1, 2
 check_expect 1 - 2, -1
 check_expect 2 * 3, 6
 check_expect 12 / 3, 4
-check_expect 2 ^ 4, 16
+check_expect 2^4, 16
+
+# checking order of numeric and logical operators
+check_expect 1 - 2 - 3 - 4, -8
+check_expect 1 + 2^2 - 4, 1
+check_expect 1 - 4/2 + 2, 1
+check_expect 1 + 2^2 - 4 == 1 and 1 == 1 - 4/2 + 2, true
+check_expect 2^3^4, 2417851639229258349412352
+check_expect false or true and true or false, true
 
 # checking comparison operators
 check_expect 1 == 1, true

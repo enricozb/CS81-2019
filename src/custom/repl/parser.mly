@@ -27,6 +27,75 @@
     | DEINDENT (l, _)
       -> l
     | EOF -> failwith "EOF has no `loc`"
+
+    let assoc_f i (_, op) = match op with
+      | "or" -> (0, -i)
+      | "and" -> (1, -i)
+      | "<" | "<=" | ">" | ">=" | "!=" | "==" -> (2, -i)
+      | "+" | "-" -> (3, -i)
+      | "*" | "/" -> (4, -i)
+      | "^" -> (5, i)
+      | _ -> failwith "Unkown operator."
+
+    let rec resolve_op_list left_ast op_list =
+      let ops, asts = List.split op_list in
+      let asts = left_ast :: asts in
+      let assocs = List.mapi assoc_f ops in
+
+      let ops = Array.of_list ops in
+      let asts = Array.of_list asts in
+      let assocs = Array.of_list assocs in
+
+      let left_right idx arr assoc_or_ops =
+        let offset = if assoc_or_ops then 0 else 1 in
+        let left = Array.sub arr 0 (idx + offset) in
+        let right = Array.sub arr (idx + 1) (Array.length arr - (idx + 1)) in
+        (left, right)
+      in
+
+      let find arr el =
+        let rec recurse n =
+          if arr.(n) = el then
+            n
+          else
+            recurse (n + 1)
+        in
+        recurse 0
+      in
+
+      let rec to_ast ops asts assocs =
+        match Array.length ops with
+          | 0 -> asts.(0)
+          | 1 ->
+            let (l, r) = (asts.(0), asts.(1)) in
+            let loc = Loc.span (Ast.loc_of_ast l) (Ast.loc_of_ast r) in
+            let op_loc, op = ops.(0) in
+            Ast.Call (loc, Ast.Name (op_loc, op), Array.to_list asts)
+          | _ ->
+            (* get min associativity index, get the op associated with it,
+             * split the asts and operators arrays
+             * get locs for ast arrays
+             * recurse *)
+            let min_assoc = Array.fold_left min assocs.(0) assocs in
+            (* min_assoc is a 2-tuple with the second element being either
+             * plus or minus `idx`. So we can use `abs` to recover idx
+             *)
+            let idx = find assocs min_assoc in
+            let op = ops.(idx) in
+            let (l_asts, r_asts) = left_right idx asts false in
+            let (l_ops, r_ops) = left_right idx ops true in
+            let (l_assocs, r_assocs) = left_right idx assocs true in
+            let loc = Loc.span
+              (Ast.loc_of_ast @@ asts.(0))
+              (Ast.loc_of_ast @@ asts.(Array.length asts - 1))
+            in
+            let op_loc, op = op in
+            Ast.Call (loc, Ast.Name (op_loc, op),
+              [to_ast l_ops l_asts l_assocs;
+               to_ast r_ops r_asts r_assocs])
+      in
+      to_ast ops asts assocs
+
 %}
 
 %token <Loc.loc * string> NAME
@@ -168,10 +237,16 @@ name_list_inner:
 
 expr:
   | non_op_expr                 { $1 }
-  | non_op_expr OPERATOR expr   {
-    Ast.Call (Loc.span (Ast.loc_of_ast $1) (Ast.loc_of_ast $3),
-              Ast.Name (fst $2, snd $2), [$1; $3])
+  | non_op_expr op_list         { resolve_op_list $1 (snd $2) }
+
+op_list:
+  | OPERATOR non_op_expr {
+    (Loc.span (fst $1) (Ast.loc_of_ast $2)), [($1, $2)]
   }
+  | OPERATOR non_op_expr op_list {
+    (Loc.span (fst $1) (fst $3)), ($1, $2) :: (snd $3)
+  }
+
 
 non_op_expr:
   | lambda                  { $1 }

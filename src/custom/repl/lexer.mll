@@ -45,6 +45,8 @@
     | "while" -> WHILE loc
     | "def" -> DEF loc
     | "return" -> RETURN loc
+    | "and" -> OPERATOR (loc, "and")
+    | "or" -> OPERATOR (loc, "or")
     | id -> NAME (loc, id)
 
   let print_token t = Printf.printf "%s\n" (string_of_token t)

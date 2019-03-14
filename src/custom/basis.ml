@@ -73,6 +73,14 @@ let num_num_to_bool f =
       | _ -> failwith "Runtime type error"
     )
 
+let bool_bool_to_bool f =
+  binary_fun
+    Type.bool_ty Type.bool_ty
+    (fun a b -> match a, b with
+      | (Value.Bool a, Value.Bool b) -> Value.Bool (f a b)
+      | _ -> failwith "Runtime type error"
+    )
+
 let len =
   unary_fun
     Type.list_gen_ty
@@ -116,6 +124,9 @@ let val_env = Env.bind_pairs
    ("tail", tail);
    ("cons", cons);
 
+   ("and", bool_bool_to_bool (&&));
+   ("or", bool_bool_to_bool (||));
+
    ("+", num_num_to_num Z.( + ));
    ("-", num_num_to_num Z.( - ));
    ("*", num_num_to_num Z.( * ));
@@ -141,6 +152,9 @@ let ty_env = Env.bind_pairs
    ("head", Type.fun_ty [Type.list_gen_ty] Type.gen_var_ty);
    ("tail", Type.fun_ty [Type.list_gen_ty] Type.list_gen_ty);
    ("cons", Type.fun_ty [Type.gen_var_ty; Type.list_gen_ty] Type.list_gen_ty);
+
+   ("and", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);
+   ("or", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);
 
    ("+", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
    ("-", Type.fun_ty [Type.int_ty; Type.int_ty] Type.int_ty);
