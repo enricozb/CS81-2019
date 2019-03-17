@@ -1,19 +1,19 @@
 def map(f, lst):
   if len(lst) != 0:
-    x = f(head(lst))
+    let x = f(head(lst))
     return cons(x, map(f, tail(lst)))
   return []
 
 def reduce(f, start, lst):
   if len(lst) != 0:
-    x = head(lst)
-    y = f(start, x)
+    let x = head(lst)
+    let y = f(start, x)
     return reduce(f, y, tail(lst))
   return start
 
 def filter(f, lst):
   if len(lst) != 0:
-    x = head(lst)
+    let x = head(lst)
     if f(x):
       return cons(x, filter(f, tail(lst)))
     else:
@@ -22,13 +22,13 @@ def filter(f, lst):
 
 
 # ---- map tests ----
-incr = (x) -> x + 1
+let incr = (x) -> x + 1
 
 check_expect map(incr, [1, 2, 3]), [2, 3, 4]
 check_expect map(incr, []), []
 
-x = [1, 2, 3]
-y = []
+let x = [1, 2, 3]
+let y = []
 
 check_expect map(incr, x), [2, 3, 4]
 check_expect map(incr, y), []
@@ -38,7 +38,7 @@ check_expect y, []
 
 # ---- filter tests ----
 
-geq_to = (n) -> (x) -> x >= n
+let geq_to = (n) -> (x) -> x >= n
 
 check_expect filter(geq_to(5), [5,2,4,8,3,9,4,6,4,2]), [5, 8, 9, 6]
 check_expect filter(geq_to(10), [5,2,4,8,3,9,4,6,4,2]), []
@@ -53,7 +53,7 @@ def range(n):
     return cons(n, range(n - 1))
 
 
-factorial = (n) -> reduce((x, y) -> x * y, 1, range(n))
+let factorial = (n) -> reduce((x, y) -> x * y, 1, range(n))
 
 check_expect reduce((x, y) -> x + y, 0, [1,2,3,4]), 10
 check_expect factorial(5), 120

@@ -12,6 +12,8 @@
     | CHECKERROR _ -> "check_error"
     | CHECKTYPEERROR _ -> "check_type_error"
     | IMPORT _ -> "import"
+    | LET _ -> "let"
+    | MUT _ -> "mut"
     | IF _ -> "if"
     | ELSE _ -> "else"
     | WHILE _ -> "while"
@@ -40,6 +42,8 @@
     | "check_error" -> CHECKERROR loc
     | "check_type_error" -> CHECKTYPEERROR loc
     | "import" -> IMPORT loc
+    | "let" -> LET loc
+    | "mut" -> MUT loc
     | "if" -> IF loc
     | "else" -> ELSE loc
     | "while" -> WHILE loc

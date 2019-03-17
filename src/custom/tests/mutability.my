@@ -1,0 +1,83 @@
+# check value restriction 1
+let mut x = []
+
+def get_x():
+  return x
+
+check_expect get_x(), []
+
+x = [1,2,3]
+
+check_expect get_x(), [1,2,3]
+check_type_error cons([], get_x())
+
+
+# check value restriction 2
+let mut x = []
+let mut xs = [x]
+
+check_expect x, []
+check_expect xs, [[]]
+
+xs = [[1]] # force x to be List<Int>
+
+check_type_error cons([], x)
+check_expect cons(2, x), [2]
+x = [3]
+check_expect x, [3]
+
+
+# make a new x binding, separate from the old one.
+let mut x = 1
+
+check_expect head(get_x()), 1
+check_expect get_x(), [1,2,3]
+check_type_error cons([], get_x())
+check_type_error get_x() == 1
+
+
+# check that we can modify a variable we don't own
+let mut x = 0
+def change_x(v):
+  if v > 0:
+    x = v
+  else:
+    x = (0 - v)
+
+check_expect x, 0
+change_x(10)
+check_expect x, 10
+change_x(-5)
+check_expect x, 5
+
+
+# check that environments aren't mixed up
+let mut x = 1
+let mut y = 1
+def nested_muts():
+  let mut x = 1
+  let mut y = 1
+  def reset():
+    x = 0
+    y = 0
+  return reset
+
+let reset = nested_muts()
+
+check_expect x, 1
+check_expect y, 1
+reset()
+check_expect x, 1
+check_expect y, 1
+
+
+# check polymorphism (and that mut_id = id)
+def mut_id(x):
+  let mut y = x
+  return y
+
+check_expect mut_id(1), 1
+check_expect mut_id([]), []
+check_expect mut_id([1,2,3]), [1,2,3]
+check_expect mut_id([[]]), [[]]
+

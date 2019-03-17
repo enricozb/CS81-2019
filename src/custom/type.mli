@@ -20,5 +20,8 @@ val list_gen_ty : ty
 val list_ty : ty -> ty
 val fun_ty : ty list -> ty -> ty
 
-val typecheck : ?level:level -> ty Env.env -> Ast.ast -> ty Env.env * ty
+val typecheck : ?level:level ->
+  ty Env.env -> bool Env.env ->  (* the type env, and the mut env *)
+  Ast.ast ->                     (* the ast to typecheck *)
+  ty Env.env * bool Env.env * ty (* returns type env, mut env, the ast type *)
 

@@ -8,7 +8,8 @@ type ast =
   | List of Loc.loc * (ast list)
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
-  | Bind of (Loc.loc * name * ast)
+  | Bind of (Loc.loc * bool * name * ast)
+  | Assign of (Loc.loc * name * ast)
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
   | Def of (Loc.loc * name * (name list) * (ast list))
@@ -36,24 +37,41 @@ let rec string_of_ast_list lst sep =
 (* TODO : change this to `to_string` *)
 and string_of_ast = function
   | Name (_, s) -> s
+
   | Num (_, i) -> i
+
   | List (_, exprs) ->
       "[" ^ string_of_ast_list exprs ", " ^ "]"
+
   | Call (_, expr, params) ->
       string_of_ast expr ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
+
   | Lambda (_, params, stmt) ->
       "(" ^ string_of_str_list params ", " ^ ") -> " ^ string_of_ast stmt
+
   | If (_, expr, true_body, false_body) ->
       "if " ^ string_of_ast expr ^ ": ... "
+
   | While (_, expr, body) ->
       "while " ^ string_of_ast expr ^ ": ... "
-  | Bind (_, name, expr) -> name ^ " = " ^ string_of_ast expr
+
+  | Bind (_, mut, name, expr) when mut ->
+      "let mut " ^ name ^ " = " ^ string_of_ast expr
+  | Bind (_, _, name, expr) ->
+      "let " ^ name ^ " = " ^ string_of_ast expr
+
+  | Assign (_, name, expr) ->
+      name ^ " = " ^ string_of_ast expr
+
   | Def (_, funcname, params, stmts) ->
       "def " ^ funcname ^ "(" ^ string_of_str_list params ", " ^ "): ..."
+
   | Return (_, ast) ->
       "return " ^ (string_of_ast ast)
+
   | Import (_, name) ->
       "import " ^ name
+
   | Suite (l, asts) -> "<suite>"
 
   | CheckExpect (l, ast1, ast2) ->
@@ -75,7 +93,8 @@ let loc_of_ast = function
   | Lambda (l, _, _)
   | If (l, _, _, _)
   | While (l, _, _)
-  | Bind (l, _, _)
+  | Assign (l, _, _)
+  | Bind (l, _, _, _)
   | Def (l, _, _, _)
   | Return (l, _)
   | Suite (l, _)

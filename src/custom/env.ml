@@ -29,3 +29,5 @@ let bind_pairs bindings env =
   let (ids, values) = List.split bindings in
   bind_many ids values env
 
+let map f env = StringMap.map f env
+

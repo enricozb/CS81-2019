@@ -6,18 +6,15 @@ type value =
   | Lambda of lambda * closure
   | Builtin of primop
 
+and env_value =
+  | Const of value
+  | Mut of value ref
+
 and lambda = (string list) * Ast.ast
-and closure = unit -> value Env.env
+and closure = unit -> env_value Env.env
 and primop = value list -> Loc.loc -> value
 
-let rec string_of_list = function
-  | [] -> ""
-  | [value] ->
-      string_of_value value
-  | value :: values ->
-      (string_of_value value) ^ ", " ^ (string_of_list values)
-
-and string_of_value = function
+let rec string_of_value = function
   | None -> "none"
   | Bool b -> string_of_bool b
   | Int i -> Z.to_string i
@@ -26,9 +23,14 @@ and string_of_value = function
   | Lambda (lambda, closure) -> "<lambda>"
   | Builtin primop -> "<builtin>"
 
+and string_of_list values =
+  String.concat ", " (List.map string_of_value values)
+
+
 let truthy l = function
   | Bool b -> b
   | value ->
       Error.type_mismatch_error l
                           ~expected: "Bool"
                           ~provided: (string_of_value value)
+

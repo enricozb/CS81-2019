@@ -20,7 +20,12 @@ and eval_item val_env frames item =
 
 
 and reduce_ast val_env frames = function
-  | Ast.Name (l, name) -> (Value (Env.lookup l name val_env), val_env, frames)
+  | Ast.Name (l, name) ->
+      begin match Env.lookup l name val_env with
+        | Value.Const value
+        | Value.Mut {contents = value} ->
+          (Value value, val_env, frames)
+      end
 
   | Ast.Num (l, i) -> (Value (Value.Int (Z.of_string i)), val_env, frames)
 
@@ -35,12 +40,17 @@ and reduce_ast val_env frames = function
   | Ast.Call (l, ast, asts) ->
       (Ast ast, val_env, Frame.Apply (l, [], asts) :: frames)
 
-  | Ast.Bind (l, name, ast) ->
-      (Ast ast, val_env, Frame.Bind (l, name) :: frames)
+  | Ast.Bind (l, mut, name, ast) ->
+      (Ast ast, val_env, Frame.Bind (l, mut, name) :: frames)
+
+  | Ast.Assign (l, name, ast) ->
+      (Ast ast, val_env, Frame.Assign (l, name) :: frames)
 
   | Ast.Def (l, name, params, suite) ->
       let rec closure () = Env.bind name lambda val_env
-      and lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
+      and lambda =
+        Value.Const (Value.Lambda ((params, Ast.Suite(l, suite)), closure))
+      in
       (Value Value.None, closure (), frames)
 
   | Ast.If (l, test, suite1, suite2) ->
@@ -65,8 +75,22 @@ and reduce_ast val_env frames = function
 
 and eval_val val_env frames value =
   match frames with
-  | Frame.Bind (l, name) :: frames ->
-      (Value value, Env.bind name value val_env, frames)
+  | Frame.Assign (l, name) :: frames ->
+      begin try match Env.get name val_env with
+        | Value.Mut value_ref ->
+            value_ref := value;
+            (Value value, val_env, frames)
+        | Value.Const _ ->
+            Error.runtime_error l "Eval: assigning to a non-mutable binding"
+      with Not_found ->
+        Error.runtime_error l "Eval: assigning to a non-existing binding"
+      end
+
+  | Frame.Bind (l, mut, name) :: frames ->
+      if mut then
+        (Value value, Env.bind name (Value.Mut (ref value)) val_env, frames)
+      else
+        (Value value, Env.bind name (Value.Const value) val_env, frames)
 
   | Frame.List (l, values_so_far, []) :: frames ->
       let values = List.rev (value :: values_so_far) in
@@ -80,7 +104,8 @@ and eval_val val_env frames value =
       else
         (Ast (Ast.Suite (l, suite2)), val_env, frames)
 
-  | Frame.CallEnv (val_env) :: frames -> (Value value, val_env, frames)
+  | Frame.CallEnv (val_env) :: frames ->
+      (Value value, val_env, frames)
 
   | Frame.Apply (l, values_so_far, []) :: frames ->
       let values = List.rev (value :: values_so_far) in
@@ -118,7 +143,12 @@ and eval_call l fun_value param_values val_env frames =
           ~expected:(List.length params)
           ~provided:(List.length param_values)
       else
-        let val_env' = Env.bind_many params param_values (env_fn ()) in
+        let val_env' =
+          Env.bind_many
+            params
+            (List.map (fun v -> Value.Const v) param_values)
+            (env_fn ())
+        in
         (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
 
   | _ -> Error.call_error l (Value.string_of_value fun_value)

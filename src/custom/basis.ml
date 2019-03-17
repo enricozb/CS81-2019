@@ -115,10 +115,11 @@ let cons =
 
 let print =
   unary_fun
-    Type.list_gen_ty
+    Type.gen_var_ty
     (fun value -> Printf.printf "%s\n" (Value.string_of_value value); Value.None)
 
 let val_env = Env.bind_pairs
+  (List.map (fun (name, v) -> (name, Value.Const v))
   [("len", len);
    ("head", head);
    ("tail", tail);
@@ -145,7 +146,9 @@ let val_env = Env.bind_pairs
    ("none", Value.None);
 
    ("print", print);
-  ] Env.empty
+  ]) Env.empty
+
+let mut_env = Env.map (fun name -> false) val_env
 
 let ty_env = Env.bind_pairs
   [("len", Type.fun_ty [Type.list_gen_ty] Type.int_ty);

@@ -4,8 +4,8 @@ def reverse(lst):
     if len(lst) == 0:
       return curr
     else:
-      x = head(lst)
-      curr = cons(x, curr)
+      let x = head(lst)
+      let curr = cons(x, curr)
       return recurse(curr, tail(lst))
   return recurse([], lst)
 

@@ -1,9 +1,11 @@
 type name = string
+type mut = bool
 
 type frame =
-  | Bind of Loc.loc * name
+  | Assign of Loc.loc * name
+  | Bind of Loc.loc * mut * name
   | If of Loc.loc * Ast.ast list * Ast.ast list
-  | CallEnv of Value.value Env.env
+  | CallEnv of Value.env_value Env.env
   | List of Loc.loc * Value.value list * Ast.ast list
   | Apply of Loc.loc * Value.value list * Ast.ast list
   | Suite of Loc.loc * Ast.ast list

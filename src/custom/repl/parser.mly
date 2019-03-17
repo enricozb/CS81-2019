@@ -2,6 +2,7 @@
   let loc_of_token = function
     | NAME (l, _)
     | NUMBER (l, _)
+    | LET l | MUT l
     | IF l
     | ELSE l
     | WHILE l
@@ -102,6 +103,7 @@
 %token <Loc.loc * string> NUMBER
 %token <Loc.loc> CHECKEXPECT CHECKERROR CHECKTYPEERROR
 %token <Loc.loc> IMPORT
+%token <Loc.loc> LET MUT
 %token <Loc.loc> IF ELSE
 %token <Loc.loc> WHILE
 %token <Loc.loc> DEF
@@ -170,14 +172,22 @@ check_stmt:
   }
 
 assign_stmt:
+  | LET MUT NAME EQUALS expr {
+    Ast.Bind (Loc.span $1 (Ast.loc_of_ast $5), true, snd $3, $5)
+  }
+
+  | LET NAME EQUALS expr {
+    Ast.Bind (Loc.span $1 (Ast.loc_of_ast $4), false, snd $2, $4)
+  }
+
   | NAME EQUALS expr {
-    Ast.Bind (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
+    Ast.Assign (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
   }
 
   | NAME ASSIGNOPERATOR expr {
     let loc_name, name = $1 in
     let loc_op, op = $2 in
-    Ast.Bind (Loc.span loc_name (Ast.loc_of_ast $3),
+    Ast.Assign (Loc.span loc_name (Ast.loc_of_ast $3),
               name,
               Ast.Call (loc_op, Ast.Name (loc_op, op),
                         [Ast.Name (loc_name, name); $3]))

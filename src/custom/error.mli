@@ -1,6 +1,7 @@
 type error =
   | RuntimeError of string
   | NameError of string
+  | BindError of string
   | TypeError of string
   | SyntaxError of string
 
@@ -11,6 +12,7 @@ val print_error : Loc.loc -> error -> unit
 val error : Loc.loc -> error -> 'a
 val runtime_error : Loc.loc -> string -> 'a
 val name_error : Loc.loc -> string -> 'a
+val bind_error : Loc.loc -> string -> 'a
 val type_error : Loc.loc -> string -> 'a
 val syntax_error : Loc.loc -> string -> 'a
 
