@@ -17,6 +17,8 @@
     | IF _ -> "if"
     | ELSE _ -> "else"
     | WHILE _ -> "while"
+    | BREAK _ -> "break"
+    | CONTINUE _ -> "continue"
     | DEF _ -> "def"
     | RETURN _ -> "return"
     | DOT _ -> "."
@@ -47,6 +49,8 @@
     | "if" -> IF loc
     | "else" -> ELSE loc
     | "while" -> WHILE loc
+    | "break" -> BREAK loc
+    | "continue" -> CONTINUE loc
     | "def" -> DEF loc
     | "return" -> RETURN loc
     | "and" -> OPERATOR (loc, "and")

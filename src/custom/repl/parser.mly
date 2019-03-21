@@ -6,6 +6,8 @@
     | IF l
     | ELSE l
     | WHILE l
+    | BREAK l
+    | CONTINUE l
     | DEF l
     | RETURN l
     | CHECKEXPECT l
@@ -105,7 +107,7 @@
 %token <Loc.loc> IMPORT
 %token <Loc.loc> LET MUT
 %token <Loc.loc> IF ELSE
-%token <Loc.loc> WHILE
+%token <Loc.loc> WHILE CONTINUE BREAK
 %token <Loc.loc> DEF
 %token <Loc.loc> RETURN
 %token <Loc.loc> COLON DOT
@@ -208,6 +210,8 @@ flow_stmt:
   | RETURN expr {
     Ast.Return (Loc.span $1 (Ast.loc_of_ast $2), $2)
   }
+  | BREAK { Ast.Break $1 }
+  | CONTINUE { Ast.Continue $1 }
 
 compound_stmt:
   | if_stmt                 { $1 }

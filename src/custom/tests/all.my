@@ -4,4 +4,5 @@ import tests.list
 import tests.types
 import tests.if_and_return
 import tests.mutability
+import tests.loops
 

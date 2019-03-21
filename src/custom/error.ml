@@ -47,11 +47,14 @@ let call_len_error l ~fun_ty ~expected ~provided =
 let call_error l invalid_fun_ty =
   error l (TypeError ("'" ^ invalid_fun_ty ^ "' is not callable"))
 
-let unreachable_code_error l =
-  syntax_error l "Code after return is unreachable"
+let unreachable_code_error l flow =
+  syntax_error l ("Code after '" ^ flow ^ "' is unreachable")
 
 let return_outside_def l =
   syntax_error l "'return' can only occur inside a function"
+
+let flow_outside_loop l =
+  syntax_error l "'break' and 'continue' can only occur inside a loop"
 
 let bind_error l id =
   error l (BindError ("cannot assign to '" ^ id ^ "' as it is not mutable"))

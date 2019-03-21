@@ -56,6 +56,25 @@ and reduce_ast val_env frames = function
   | Ast.If (l, test, suite1, suite2) ->
       (Ast test, val_env, Frame.If (l, suite1, suite2) :: frames)
 
+  | Ast.While (l, test, suite) ->
+      (Ast test, val_env, Frame.WhileTest (l, test, suite) :: frames)
+
+  | Ast.Break l ->
+      let rec unwind frames = match frames with
+        | [] -> Error.flow_outside_loop l
+        | Frame.WhileBody _ :: frames ->
+            (Value Value.None, val_env, frames)
+        | _ :: frames -> unwind frames
+      in unwind frames
+
+  | Ast.Continue l ->
+      let rec unwind frames = match frames with
+        | [] -> Error.flow_outside_loop l
+        | Frame.WhileBody (l, test, suite) :: frames ->
+            (Ast test, val_env, Frame.WhileTest (l, test, suite) :: frames)
+        | _ :: frames -> unwind frames
+      in unwind frames
+
   | Ast.Suite (_, []) ->
       (Value Value.None, val_env, frames)
   | Ast.Suite (l, ast :: asts) ->
@@ -103,6 +122,16 @@ and eval_val val_env frames value =
         (Ast (Ast.Suite (l, suite1)), val_env, frames)
       else
         (Ast (Ast.Suite (l, suite2)), val_env, frames)
+
+  | Frame.WhileTest (l, test, suite) :: frames ->
+      if Value.truthy l value then
+        let frames = Frame.WhileBody (l, test, suite) :: frames in
+        (Ast (Ast.Suite (l, suite)), val_env, frames)
+      else
+        (Value Value.None, val_env, frames)
+
+  | Frame.WhileBody (l, test, suite) :: frames ->
+      (Ast test, val_env, WhileTest (l, test, suite) :: frames)
 
   | Frame.CallEnv (val_env) :: frames ->
       (Value value, val_env, frames)

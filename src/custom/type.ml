@@ -120,6 +120,12 @@ let rec unify loc ty1 ty2 =
         ty_ref := Link ty
 
     | TyFun (ty_params1, ty_ret1), TyFun (ty_params2, ty_ret2) ->
+        (* TODO : improve this error... it's often just a simple
+         * call error, where the incorrect number of arguments were
+         * provided *)
+        if List.length ty_params1 <> List.length ty_params2 then
+          Error.unify_error loc (string_of_type ty1) (string_of_type ty2);
+
         (* return types should be equal, as should argument types *)
         List.iter2 unify ty_params1 ty_params2;
         unify ty_ret1 ty_ret2
@@ -184,14 +190,14 @@ let rec suite_always_returns suite = match suite with
   | [] -> false
   | Ast.Return (_, ast) :: [] -> true
   | Ast.Return (l, _) :: rest ->
-      Error.unreachable_code_error l
+      Error.unreachable_code_error l "return"
 
   | Ast.If (l, _, suite1, suite2) :: rest ->
       if suite_always_returns suite1 && suite_always_returns suite2 then
         if rest = [] then
           true
         else
-          Error.unreachable_code_error l
+          Error.unreachable_code_error l "return"
       else
         suite_always_returns rest
 
@@ -208,6 +214,12 @@ let is_expansive = function
 
 
 (* ---- TYPE-CHECKING ---- *)
+(* properties of suites returned on typecheck_suite *)
+type suite_props =
+    { ret_tys    : ty list;
+      flow_stmts : bool;
+    }
+
 let rec typecheck ?level:(level=1) ty_env mut_env ast =
   let ty = infer level ty_env mut_env ast in
 
@@ -245,10 +257,22 @@ and infer level ty_env mut_env ast = match ast with
 
   | Ast.If (l, ast, suite1, suite2) ->
       let test_ty = infer level ty_env mut_env ast in
-      let ret_tys1 = typecheck_suite level ty_env mut_env suite1 in
-      let ret_tys2 = typecheck_suite level ty_env mut_env suite2 in
+      let suite_props1 = typecheck_suite level ty_env mut_env suite1 in
+      let suite_props2 = typecheck_suite level ty_env mut_env suite2 in
 
-      if (ret_tys1, ret_tys2) <> ([], []) then
+      if (suite_props1.ret_tys, suite_props2.ret_tys) <> ([], []) then
+        Error.return_outside_def l;
+
+      if suite_props1.flow_stmts || suite_props2.flow_stmts then
+        Error.flow_outside_loop l;
+
+      unify l test_ty bool_ty;
+      none_ty
+
+  | Ast.While (l, ast, suite) ->
+      let test_ty = infer level ty_env mut_env ast in
+      let suite_props = typecheck_suite level ty_env mut_env suite in
+      if suite_props.ret_tys <> [] then
         Error.return_outside_def l;
 
       unify l test_ty bool_ty;
@@ -298,14 +322,17 @@ and infer level ty_env mut_env ast = match ast with
         (name :: params)
         (List.init len (fun _ -> false)) mut_env in
 
-      let ret_tys = typecheck_suite (level + 1) ty_env' mut_env' suite in
+      let suite_props = typecheck_suite (level + 1) ty_env' mut_env' suite in
+
+      if suite_props.flow_stmts then
+        Error.flow_outside_loop l;
 
       if suite_always_returns suite then
-        pairwise_unify l ret_tys
+        pairwise_unify l suite_props.ret_tys
       else
-        pairwise_unify l (none_ty :: ret_tys);
+        pairwise_unify l (none_ty :: suite_props.ret_tys);
 
-      let ret_ty = match ret_tys with
+      let ret_ty = match suite_props.ret_tys with
         | [] -> none_ty
         | ret_ty :: _ -> ret_ty
       in
@@ -314,28 +341,48 @@ and infer level ty_env mut_env ast = match ast with
 
       generalize level functype
 
+  | Ast.Return (l, _) ->
+      Error.return_outside_def l;
+
+  | Ast.Continue l | Ast.Break l ->
+      Error.flow_outside_loop l;
+
   | _ -> failwith "Type.infer called on non-implemented Ast"
 
 (* TODO : potentially return the last ty_env if we want the modified scope *)
 and typecheck_suite level ty_env mut_env suite =
   let current_level = ref level in
-  let rec recurse ty_env mut_env ret_tys suite =
+  let rec recurse ty_env mut_env suite_props suite =
     match suite with
-    | [] -> ret_tys
+    | [] -> suite_props
 
     | Ast.Return (l, ast) :: [] ->
         let (_, _, ty) = typecheck ~level:!current_level ty_env mut_env ast in
-        ty :: ret_tys
+        {suite_props with ret_tys = ty :: suite_props.ret_tys}
     | Ast.Return (l, _) :: rest ->
-        Error.unreachable_code_error l
+        Error.unreachable_code_error l "return"
+
+    | Ast.Break l :: []
+    | Ast.Continue l :: [] ->
+        {suite_props with flow_stmts = true}
+
+    | Ast.Break l :: rest ->
+        Error.unreachable_code_error l "break"
+    | Ast.Continue l :: rest ->
+        Error.unreachable_code_error l "continue"
 
     | Ast.If (l, test, suite1, suite2) :: rest ->
       let test_ty = infer level ty_env mut_env test in
-      let ret_tys1 = typecheck_suite level ty_env mut_env suite1 in
-      let ret_tys2 = typecheck_suite level ty_env mut_env suite2 in
+      let suite_props1 = typecheck_suite level ty_env mut_env suite1 in
+      let suite_props2 = typecheck_suite level ty_env mut_env suite2 in
 
       unify l test_ty bool_ty;
-      recurse ty_env mut_env (ret_tys1 @ ret_tys2) rest
+      recurse
+        ty_env
+        mut_env
+        {suite_props with ret_tys =
+          suite_props.ret_tys @ suite_props1.ret_tys @ suite_props2.ret_tys}
+        rest
 
     | (Ast.Bind _ as ast) :: suite
     | (Ast.Def _ as ast) :: suite ->
@@ -343,11 +390,11 @@ and typecheck_suite level ty_env mut_env suite =
           typecheck ~level:!current_level ty_env mut_env ast
         in
         incr current_level;
-        recurse ty_env mut_env ret_tys suite
+        recurse ty_env mut_env suite_props suite
 
     | ast :: asts ->
         let (_, _, _) = typecheck ~level:!current_level ty_env mut_env ast in
-        recurse ty_env mut_env ret_tys asts
+        recurse ty_env mut_env suite_props asts
 
-  in recurse ty_env mut_env [] suite
+  in recurse ty_env mut_env {ret_tys = []; flow_stmts = false} suite
 

@@ -10,6 +10,7 @@ and tyvar =
   | Unbound of id * level
   | Generic of id
 
+
 val string_of_type : ty -> string
 
 val gen_var_ty : ty

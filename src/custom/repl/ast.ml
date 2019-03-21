@@ -12,6 +12,8 @@ type ast =
   | Assign of (Loc.loc * name * ast)
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
+  | Break of Loc.loc
+  | Continue of Loc.loc
   | Def of (Loc.loc * name * (name list) * (ast list))
   | Return of (Loc.loc * ast)
   | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
@@ -55,6 +57,10 @@ and string_of_ast = function
   | While (_, expr, body) ->
       "while " ^ string_of_ast expr ^ ": ... "
 
+  | Break l -> "break"
+
+  | Continue l -> "continue"
+
   | Bind (_, mut, name, expr) when mut ->
       "let mut " ^ name ^ " = " ^ string_of_ast expr
   | Bind (_, _, name, expr) ->
@@ -93,6 +99,8 @@ let loc_of_ast = function
   | Lambda (l, _, _)
   | If (l, _, _, _)
   | While (l, _, _)
+  | Break l
+  | Continue l
   | Assign (l, _, _)
   | Bind (l, _, _, _)
   | Def (l, _, _, _)
@@ -111,4 +119,21 @@ let loc_of_ast_list = function
         | [] -> loc
         | ast :: rest -> loc_of_ast_ (Loc.span loc @@ loc_of_ast ast) rest
       in loc_of_ast_ (loc_of_ast ast) rest
+
+let is_expr = function
+  | Name _ | Num _ | List _ | Call _ | Lambda _ -> true
+  | If _ 
+  | While _ 
+  | Break _ 
+  | Continue _ 
+  | Assign _ 
+  | Bind _ 
+  | Def _ 
+  | Return _ 
+  | Suite _ 
+  | Import _ 
+  | CheckExpect _ 
+  | CheckError _ 
+  | CheckTypeError _ 
+    -> false
 

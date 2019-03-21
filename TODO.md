@@ -2,23 +2,15 @@
 
 ## TODO
 - Add tuples
+- Add ADT
 - Figure out mutation for values
 - Add `not` operator
+- Check out bidirectional types
 - Add TCO
 - Relax the value restriction according to
   [this paper](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)
 
 ## Bugs
-### Incorrect number of arguments
-this should fail at the type-level
-```
-def f():
-  return 1
-
-f(1)
-```
-but causes a runtime error.
-
 ### Check-* should add type constraints
 ```
 let mut x = []

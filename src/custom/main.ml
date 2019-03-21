@@ -75,8 +75,11 @@ let rec run ?(quiet=false) (ty_env, mut_env, val_env) ast =
       run_ast (ty_env, mut_env, val_env) ~quiet:quiet ast
 
   | _ ->
-      run_ast (ty_env, mut_env, val_env) ~quiet:quiet
-        (Ast.Bind (Ast.loc_of_ast ast, false, "_", ast))
+      if Ast.is_expr ast then
+        run_ast (ty_env, mut_env, val_env) ~quiet:quiet
+          (Ast.Bind (Ast.loc_of_ast ast, false, "_", ast))
+      else
+        run_ast (ty_env, mut_env, val_env) ~quiet:quiet ast
 
 
 let rec repl_func ast_or_error (ty_env, mut_env, val_env) =

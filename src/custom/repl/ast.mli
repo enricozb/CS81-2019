@@ -10,6 +10,8 @@ type ast =
   | Assign of (Loc.loc * name * ast)
   | If of (Loc.loc * ast * (ast list) * (ast list))
   | While of (Loc.loc * ast * (ast list))
+  | Break of Loc.loc
+  | Continue of Loc.loc
   | Def of (Loc.loc * name * (name list) * (ast list))
   | Return of (Loc.loc * ast)
   | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
@@ -22,4 +24,4 @@ val string_of_ast : ast -> string
 
 val loc_of_ast : ast -> Loc.loc
 val loc_of_ast_list : ast list -> Loc.loc
-
+val is_expr : ast -> bool

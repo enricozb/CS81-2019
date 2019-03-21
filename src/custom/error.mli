@@ -28,6 +28,7 @@ val call_len_error : Loc.loc ->
 val call_error : Loc.loc -> string -> 'a
 
 
-val unreachable_code_error : Loc.loc -> 'a
+val unreachable_code_error : Loc.loc -> string -> 'a
 val return_outside_def : Loc.loc -> 'a
+val flow_outside_loop : Loc.loc -> 'a
 

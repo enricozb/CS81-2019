@@ -5,6 +5,8 @@ type frame =
   | Assign of Loc.loc * name
   | Bind of Loc.loc * mut * name
   | If of Loc.loc * Ast.ast list * Ast.ast list
+  | WhileTest of Loc.loc * Ast.ast * Ast.ast list
+  | WhileBody of Loc.loc * Ast.ast * Ast.ast list
   | CallEnv of Value.env_value Env.env
   | List of Loc.loc * Value.value list * Ast.ast list
   | Apply of Loc.loc * Value.value list * Ast.ast list
