@@ -4,28 +4,6 @@ open Parser
 module I =
   Parser.MenhirInterpreter
 
-let replicate (n : int) (el : 'a) =
-  let rec iter curr = function
-    | 0 -> curr
-    | n -> iter (el :: curr) (n - 1)
-  in iter [] n
-
-let lexfun_cache (filename : string) =
-  let cache = ref [] in
-  fun lexbuf ->
-    match !cache with
-    | x::xs -> cache := xs; x
-    | [] ->
-        match !Lexer.state with
-        | Lexer.CODE -> Lexer.token filename lexbuf
-        | Lexer.RECENT_NEWLINE -> begin
-            match Lexer.newline filename lexbuf with
-            | DEINDENT (loc, n) -> begin
-                cache := (replicate (n - 1) (DEDENT loc));
-                (DEDENT loc)
-            end
-            | token -> token
-        end
 
 (* Prints tokens as they are produced *)
 let print_wrap lexfun =
@@ -84,8 +62,8 @@ let parse_repl () =
     let lexbuf = Lexing.from_string str in
     try
       loop
-        (lexfun_cache filename)
-        (*(print_wrap @@ lexfun_cache filename)*)
+        (Lexer.token_cache filename)
+        (*(print_wrap @@ Lexer.token_cache filename)*)
         lexbuf
         (Parser.Incremental.single_input lexbuf.lex_curr_p)
     with
@@ -103,18 +81,9 @@ let parse_file (filename : string) =
   Lexer.reset_state ();
   let lexbuf = Lexing.from_channel (open_in filename) in
     try
-      Parser.file_input (lexfun_cache filename) lexbuf
+      Parser.file_input (Lexer.token_cache filename) lexbuf
     with _ ->
       let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
-      raise (ParsingError loc)
-
-
-let parse_lexbuf (name : string) lexbuf =
-  Lexer.reset_state ();
-    try
-      Parser.file_input (lexfun_cache name) lexbuf
-    with _ ->
-      let loc = Loc.get_loc name (lexeme_start_p lexbuf) (lexeme lexbuf) in
       raise (ParsingError loc)
 
 (* takes in a function that takes in the (`Ast || `ParsingError) read in and

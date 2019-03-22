@@ -175,3 +175,30 @@ and newline filename = parse
     | `Token t -> t
   }
 
+{
+
+  let replicate (n : int) (el : 'a) =
+    let rec iter curr = function
+      | 0 -> curr
+      | n -> iter (el :: curr) (n - 1)
+    in iter [] n
+
+  let token_cache (filename : string) =
+    let cache = ref [] in
+    fun lexbuf ->
+      match !cache with
+      | x::xs -> cache := xs; x
+      | [] ->
+          match !state with
+          | CODE -> token filename lexbuf
+          | RECENT_NEWLINE ->
+              begin match newline filename lexbuf with
+                | DEINDENT (loc, n) -> begin
+                    cache := (replicate (n - 1) (DEDENT loc));
+                    (DEDENT loc)
+                end
+                | token -> token
+              end
+
+}
+

@@ -13,7 +13,7 @@ val print_token : Parser.token -> unit
 (* Lexing *)
 exception SyntaxError of Loc.loc
 
-val token : string -> Lexing.lexbuf -> Parser.token
+val token_cache : string -> Lexing.lexbuf -> Parser.token
 val newline : string -> Lexing.lexbuf -> Parser.token
 
 val reset_state : unit -> unit
