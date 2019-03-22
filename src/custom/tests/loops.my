@@ -1,18 +1,22 @@
 def reverse(lst):
   let mut curr = []
   let mut lst = lst
+
   while len(lst) > 0:
     curr = cons(head(lst), curr)
     lst = tail(lst)
+
   return curr
 
 def map_imp(f, lst):
   let mut curr = []
   let mut lst = lst
+
   while len(lst) > 0:
     let hd = head(lst)
     curr = cons(f(hd), curr)
     lst = tail(lst)
+
   return reverse(curr)
 
 let incr = (x) -> x + 1
@@ -32,23 +36,28 @@ check_expect map_imp(apply_to_8, [incr, decr, cube, half]), [9, 7, 512, 4]
 # check break/continue
 let mut x = 0
 let mut xvals = []
+
 while x < 10:
   x = x + 1
   if x > 5:
     break
+
   xvals = cons(x, xvals)
 
 check_expect x, 6
 check_expect xvals, [5, 4, 3, 2, 1]
 
+
 let mut x = 0
 let mut xvals1 = []
 let mut xvals2 = []
+
 while x < 10:
   x = x + 1
   xvals1 = cons(x, xvals1)
   if x > 5:
     continue
+
   xvals2 = cons(x, xvals2)
 
 check_expect x, 10

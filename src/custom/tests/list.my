@@ -1,12 +1,13 @@
 def reverse(lst):
   # similar to reduce(cons, [], lst)
   def recurse(curr, lst):
-    if len(lst) == 0:
-      return curr
-    else:
+    if len(lst) != 0:
       let x = head(lst)
       let curr = cons(x, curr)
       return recurse(curr, tail(lst))
+
+    return curr
+
   return recurse([], lst)
 
 

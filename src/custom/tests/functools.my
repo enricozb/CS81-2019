@@ -2,6 +2,7 @@ def map(f, lst):
   if len(lst) != 0:
     let x = f(head(lst))
     return cons(x, map(f, tail(lst)))
+
   return []
 
 def reduce(f, start, lst):
@@ -9,6 +10,7 @@ def reduce(f, start, lst):
     let x = head(lst)
     let y = f(start, x)
     return reduce(f, y, tail(lst))
+
   return start
 
 def filter(f, lst):
@@ -16,8 +18,8 @@ def filter(f, lst):
     let x = head(lst)
     if f(x):
       return cons(x, filter(f, tail(lst)))
-    else:
-      return filter(f, tail(lst))
+    return filter(f, tail(lst))
+
   return []
 
 

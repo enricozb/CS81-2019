@@ -58,7 +58,7 @@ let read_line_with_prompt (prompt : string) =
 let parse_repl () =
   let filename = "__repl__" in
   let rec loop_until_parse str =
-    Lexer.reset_state ();
+    Lexer.reset_state REPL;
     let lexbuf = Lexing.from_string str in
     try
       loop
@@ -78,7 +78,7 @@ let parse_repl () =
   end
 
 let parse_file (filename : string) =
-  Lexer.reset_state ();
+  Lexer.reset_state FILE;
   let lexbuf = Lexing.from_channel (open_in filename) in
     try
       Parser.file_input (Lexer.token_cache filename) lexbuf

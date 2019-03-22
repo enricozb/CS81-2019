@@ -1,6 +1,7 @@
 # typed_uscheme
 
 ## TODO
+- Add debug mode for printing tokens
 - Add tuples
 - Add ADT
 - Figure out mutation for values
@@ -19,17 +20,6 @@ check_expect x, [[]]
 ```
 typechecks successfully. This should not happen. The constraints occuring here
 should cause type restrictions on `x`.
-
-### Whitespace in file_input
-```
-def f():
-  def g():
-    return 0
-
-  return g()
-```
-causes a parser error because of the double newline...
-
 
 ## Questions
 - Why does `Value.Closure` need `(fun () -> val_env)`

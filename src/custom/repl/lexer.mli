@@ -1,11 +1,15 @@
-
 type state =
+  | REPL_DOUBLE_NEWLINE
   | RECENT_NEWLINE
   | CODE
 
+type mode =
+  | REPL
+  | FILE
+
 val state : state ref
 
-(* Tokens (TODO) put in parser *)
+(* TODO : take tokens out of parser *)
 
 val string_of_token : Parser.token -> string
 val print_token : Parser.token -> unit
@@ -16,5 +20,5 @@ exception SyntaxError of Loc.loc
 val token_cache : string -> Lexing.lexbuf -> Parser.token
 val newline : string -> Lexing.lexbuf -> Parser.token
 
-val reset_state : unit -> unit
+val reset_state : mode -> unit
 

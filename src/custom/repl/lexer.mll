@@ -2,8 +2,17 @@
   open Lexing
   open Parser
 
-  type state = RECENT_NEWLINE | CODE
+  type state =
+    | REPL_DOUBLE_NEWLINE
+    | RECENT_NEWLINE
+    | CODE
+
+  type mode =
+    | REPL
+    | FILE
+
   let state = ref CODE
+  let mode = ref REPL
 
   let string_of_token = function
     | NAME (_, s) -> s
@@ -66,18 +75,27 @@
   let line_number = ref 1
   let paren_count = ref 0
 
-  let next_line lexbuf =
+  let next_line num_lines lexbuf =
     incr line_number;
     let pos = lexbuf.lex_curr_p in
     lexbuf.lex_curr_p <-
       { pos with pos_bol = lexbuf.lex_curr_pos;
-                 pos_lnum = pos.pos_lnum + 1
+                 pos_lnum = pos.pos_lnum + num_lines
       }
+
+  let rec count_newlines s =
+    if String.length s = 0 then
+      0
+    else if s.[0] = '\n' then
+      1 + count_newlines (String.sub s 1 (String.length s - 1))
+    else
+      count_newlines (String.sub s 1 (String.length s - 1))
 
   let space_stack = Stack.create ()
   let _ = Stack.push 0 space_stack
 
-  let reset_state () =
+  let reset_state new_mode =
+    mode := new_mode;
     state := CODE;
     paren_count := 0;
     Stack.clear space_stack;
@@ -114,13 +132,17 @@ let operators = ['.' '+' '-' '*' '/' '%' '<' '>' '=' '^']
 
 rule token filename = parse
   | ['#'] [^'\n']* ['\n'] {
-    next_line lexbuf;
+    next_line 1 lexbuf;
     token filename lexbuf
   }
-  | ['\n'] {
-    next_line lexbuf;
+  | ['\n'] [' ' '\n']* ['\n'] | ['\n'] as newlines {
+    next_line (count_newlines newlines) lexbuf;
     if !paren_count = 0 then begin
-      state := RECENT_NEWLINE;
+      if String.length newlines = 1 || !mode = FILE then
+        state := RECENT_NEWLINE
+      else
+        state := REPL_DOUBLE_NEWLINE;
+
       NEWLINE (make_loc filename lexbuf)
     end else
       token filename lexbuf
@@ -197,6 +219,25 @@ and newline filename = parse
                     cache := (replicate (n - 1) (DEDENT loc));
                     (DEDENT loc)
                 end
+                | token -> token
+              end
+          (* this disgusting logic is so in a REPL, two successive NEWLINEs
+           * will terminate a `compount_stmt`. But in files, we want things
+           * that match ['\n'] [' ' '\n']* ['\n'] to be counted as a single
+           * newline *)
+          | REPL_DOUBLE_NEWLINE ->
+              (* ask for count_indent on no spaces, push those DEDENTs out *)
+              state := CODE;
+              let token = match count_indent (make_loc filename lexbuf) 0 with
+                | `Skip -> token filename lexbuf
+                | `Token t -> t
+              in
+              begin match token with
+                | DEINDENT (loc, n) ->
+                  begin
+                    cache := (NEWLINE loc) :: (replicate (n - 1) (DEDENT loc));
+                    (DEDENT loc)
+                  end
                 | token -> token
               end
 
