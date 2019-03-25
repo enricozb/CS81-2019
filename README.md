@@ -13,11 +13,13 @@
   - A potentially useful toy language. Python 3 with hindley-milner.
 
 ### Papers & Readings
+- [Modifiable Data Structures In OCaml](https://caml.inria.fr/pub/docs/oreilly-book/html/book-ora026.html)
+  - Used to implement value restriction. Especially the very bottom section.
+- [Relaxing The Value Restriction](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)
 - [MLsub - Hindley Milner + Subtyping](https://www.cl.cam.ac.uk/~sd601/mlsub/)
 - [Typeclasses & Hindley Milner](https://boxbase.org/entries/2018/apr/16/typeclasses/)
 - [How OCaml type checker works](http://okmij.org/ftp/ML/generalization.html#introduction)
-  - useful for understanding generalization & use of levels for efficient
-    generalization
+  - Used to implement generalization with levels for efficiency.
 
 ### Ideology
 We want it to write as closely to Python as possible. Something close to

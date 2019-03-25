@@ -1,15 +1,15 @@
 # typed_uscheme
 
 ## TODO
-- Add debug mode for printing tokens
 - Add tuples
-- Add ADT
-- Figure out mutation for values
-- Add `not` operator
-- Check out bidirectional types
-- Add TCO
+- Add GADTs
 - Relax the value restriction according to
   [this paper](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)
+- Figure out mutation for values
+- Add `not` operator
+- Add TCO
+- Add debug mode for printing tokens
+- Check out bidirectional types
 
 ## Bugs
 ### Check-* should add type constraints
