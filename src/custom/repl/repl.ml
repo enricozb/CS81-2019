@@ -82,6 +82,7 @@ let parse_file (filename : string) =
   let lexbuf = Lexing.from_channel (open_in filename) in
     try
       Parser.file_input (Lexer.token_cache filename) lexbuf
+      (*Parser.file_input (print_wrap @@ Lexer.token_cache filename) lexbuf*)
     with _ ->
       let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
       raise (ParsingError loc)

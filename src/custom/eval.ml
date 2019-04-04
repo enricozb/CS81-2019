@@ -33,6 +33,18 @@ and reduce_ast val_env frames = function
   | Ast.List (l, ast :: asts) ->
       (Ast ast, val_env, Frame.List (l, [], asts) :: frames)
 
+  | Ast.Record (l, field_ast_map) when Ast.NameMap.is_empty field_ast_map ->
+      (Value (Value.Object Value.FieldMap.empty), val_env, frames)
+  | Ast.Record (l, field_ast_map) ->
+      let (field, ast) = Ast.NameMap.choose field_ast_map in
+      let field_ast_map = Ast.NameMap.remove field field_ast_map in
+      (Ast ast,
+       val_env,
+       Frame.Object (l, field, Value.FieldMap.empty, field_ast_map) :: frames)
+
+  | Ast.Field (l, ast, field) ->
+      (Ast ast, val_env, Frame.Field (l, field) :: frames)
+
   | Ast.Lambda (l, params, body_ast) ->
       let value = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
       (Value value, val_env, frames)
@@ -116,6 +128,37 @@ and eval_val val_env frames value =
       (Value (Value.List values), val_env, frames)
   | Frame.List (l, values_so_far, ast :: asts) :: frames ->
       (Ast ast, val_env, (Frame.List (l, value :: values_so_far, asts) :: frames))
+
+  | Frame.Object (l, name, field_value_map, field_ast_map) :: frames
+    when Ast.NameMap.is_empty field_ast_map ->
+      let field_value_map = Value.FieldMap.add name value field_value_map in
+      (Value (Value.Object field_value_map), val_env, frames)
+  | Frame.Object (l, field, field_value_map, field_ast_map) :: frames ->
+      (* add just computed field to map *)
+      let field_value_map = Value.FieldMap.add field value field_value_map in
+      (* get next field and ast to compute *)
+      let (field, ast) = Ast.NameMap.choose field_ast_map in
+      let field_ast_map = Ast.NameMap.remove field field_ast_map in
+      (Ast ast,
+       val_env,
+       Frame.Object (l, field, field_value_map, field_ast_map) :: frames)
+
+  | Frame.Field (l, field) :: frames ->
+      begin match value with
+      | Object field_value_map ->
+          begin match Value.FieldMap.find_opt field field_value_map with
+          | None ->
+              Error.runtime_error
+                l
+                ("Accessing non-existent field '" ^ field ^ "'")
+          | Some value ->
+            (Value value, val_env, frames)
+          end
+      | _ ->
+          Error.runtime_error
+            l
+            ("Accessing field '" ^ field ^ "' of non-object")
+      end
 
   | Frame.If (l, suite1, suite2) :: frames ->
       if Value.truthy l value then

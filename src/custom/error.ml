@@ -39,6 +39,9 @@ let type_mismatch_error l ~expected ~provided =
 let unify_error l ty1 ty2 =
   error l (TypeError ("Cannot unify types " ^ ty1 ^ " and " ^ ty2 ^ "."))
 
+let missing_field l field =
+  error l (TypeError ("Field '" ^ field ^ "' is missing"))
+
 let call_len_error l ~fun_ty ~expected ~provided =
   error l (TypeError (fun_ty ^ " takes " ^ (string_of_int expected) ^
            " positional arguments but " ^ (string_of_int provided) ^

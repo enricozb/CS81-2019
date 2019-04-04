@@ -6,11 +6,53 @@ type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
+  | TyRecord of tyrow
+	| TyRowEmpty
+	| TyRowExtend of ty Ast.NameMap.t * tyrow
 
 and tyvar =
   | Link of ty
   | Unbound of id * level
   | Generic of id
+
+and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
+
+let rec real_ty = function
+  | TyVar {contents = Link ty} -> real_ty ty
+  | ty -> ty
+
+(* ---- ROW/RECORDS ---- *)
+let merge_name_ty_maps name_map1 name_map2 =
+	Ast.NameMap.merge
+		(fun name maybe_ty_list1 maybe_ty_list2 ->
+			match maybe_ty_list1, maybe_ty_list2 with
+				| None, None -> assert false
+				| None, (Some ty) -> Some ty
+				| (Some ty), None -> Some ty
+				| (Some _), (Some _) ->
+            failwith "Type.merge_name_ty_maps: duplicate bindings")
+		name_map1 name_map2
+
+(* returns (ty Ast.NameMap.t * row) where row = TyRowEmpty or a tyvar *)
+let rec collapse_tyrow = function
+	| TyRowExtend (name_ty_map, rest_ty) ->
+      begin match collapse_tyrow rest_ty with
+      | (name_ty_map2, rest_ty) when Ast.NameMap.is_empty name_ty_map2 ->
+          (name_ty_map, rest_ty)
+      | (name_ty_map2, rest_ty) ->
+          (merge_name_ty_maps name_ty_map name_ty_map2, rest_ty)
+      end
+
+	| TyVar {contents = Link ty} ->
+      collapse_tyrow ty
+
+	| TyVar _ as var ->
+      (Ast.NameMap.empty, var)
+
+	| TyRowEmpty -> (Ast.NameMap.empty, TyRowEmpty)
+
+	| ty ->
+      failwith "Type.collapse_tyrow: not a row"
 
 
 (* canonicalizes at least the general types *)
@@ -20,7 +62,7 @@ let rec string_of_type ty =
   let next_char () =
     let i = !curr_char in
     incr curr_char;
-    let name = String.make 1 (Char.chr (65 + i mod 26)) ^
+    let name = String.make 1 (Char.chr (97 + i mod 26)) ^
       if i >= 26 then
         string_of_int (i / 26)
       else
@@ -28,8 +70,11 @@ let rec string_of_type ty =
     in name
   in
 
-  let rec recurse_tys tys = String.concat ", " (List.map recurse tys)
-  and recurse ty = match ty with
+  (* to check whether or not to wrap arrow types in () *)
+  let rec recurse_tys tys =
+    String.concat ", " (List.map (recurse ~toplevel:false) tys)
+
+  and recurse ?(toplevel=false) ty = match ty with
     | TyVar {contents = Generic id} ->
         begin try
           Hashtbl.find id_to_char id
@@ -51,10 +96,39 @@ let rec string_of_type ty =
 
     | TyFun (param_tys, ret_ty) ->
         (* to force evaluation of params first *)
-        let param_str = recurse_tys param_tys in
-        "{" ^ param_str ^ "} -> " ^ (recurse ret_ty)
+        let single_param = List.length param_tys = 1 in
+        let param_str =
+          if single_param then
+            recurse_tys param_tys
+          else
+            "(" ^ recurse_tys param_tys ^ ")"
+        in
+        if toplevel then
+          param_str ^ " -> " ^ (recurse ret_ty)
+        else
+          "(" ^ param_str ^ " -> " ^ (recurse ret_ty) ^ ")"
+
+    | TyRecord tyrow -> "{" ^ (recurse tyrow) ^ "}"
+
+    | TyRowEmpty -> ""
+
+    | TyRowExtend _ as tyrow ->
+        let (name_ty_map, rest_ty) = collapse_tyrow tyrow in
+        let name_ty_map_str =
+					String.concat ", " @@
+						List.map
+							(fun (field, ty) -> field ^ ": " ^ (recurse ty))
+							(Ast.NameMap.bindings name_ty_map)
+				in
+				let rest_ty_str = match real_ty rest_ty with
+					| TyRowEmpty -> ""
+					| TyRowExtend _ -> assert false
+					| ty -> " | " ^ recurse ty
+				in
+				name_ty_map_str ^ rest_ty_str
+
   in
-  recurse ty
+  recurse ~toplevel:true ty
 
 
 (* errors if occurs check fails, otherwise returns unit *)
@@ -69,24 +143,36 @@ let rec occurs loc tyvar_id tyvar_level ty =
       else
         if tyvar_level2 > tyvar_level then
           tyvar2 := Unbound(tyvar_id2, tyvar_level)
-
     | TyVar {contents = Link ty} ->
         recurse ty
+
     | TyCon (_, param_tys) ->
         List.iter recurse param_tys
+
     | TyFun (param_tys, ret_ty) ->
         List.iter recurse param_tys;
         recurse ret_ty
 
+    | TyRecord tyrow ->
+        recurse tyrow
 
+		| TyRowEmpty -> ()
+
+		| TyRowExtend (name_ty_map, rest_ty) ->
+        Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
+				recurse rest_ty
+
+
+
+(* TODO : remove unit param from `fresh_tyvar` *)
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =
-  fresh_counter := !fresh_counter + 1;
-  TyVar {contents = Unbound ("T" ^ string_of_int !fresh_counter, level)}
+  incr fresh_counter;
+  TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level)}
 
 
 (* common types *)
-let gen_var_ty = TyVar {contents = Generic "A"}
+let gen_var_ty = TyVar {contents = Generic "a"}
 let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
 let int_ty = TyCon ("Int", [])
@@ -130,8 +216,81 @@ let rec unify loc ty1 ty2 =
         List.iter2 unify ty_params1 ty_params2;
         unify ty_ret1 ty_ret2
 
+    | TyRecord tyrow1, TyRecord tyrow2 ->
+        unify tyrow1 tyrow2
+
+		| TyRowEmpty, TyRowEmpty -> ()
+
+    | (TyRowExtend _ as tyrow1), (TyRowExtend _ as tyrow2) ->
+        unify_rows loc tyrow1 tyrow2
+
+    | TyRowEmpty, TyRowExtend (name_ty_map, _)
+    | TyRowExtend (name_ty_map, _), TyRowEmpty ->
+				let field, _ = Ast.NameMap.choose name_ty_map in
+				Error.missing_field loc field
+
     | (ty1, ty2) ->
         Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
+
+
+and unify_rows loc tyrow1 tyrow2 =
+  let name_ty_map1, rest_ty1 = collapse_tyrow tyrow1 in
+	let name_ty_map2, rest_ty2 = collapse_tyrow tyrow2 in
+
+  let bind_distinct_names name_ty_map name_ty_list =
+    List.fold_left
+      (fun name_ty_map (name, ty) ->
+        assert (not (Ast.NameMap.mem name name_ty_map));
+        Ast.NameMap.add name ty name_ty_map)
+    name_ty_map name_ty_list
+  in
+
+  let rec unify_names missing1 missing2 names1 names2 =
+    match (names1, names2) with
+    | [], [] -> missing1, missing2
+    | ([], _) -> (bind_distinct_names missing1 names2, missing2)
+		| (_, []) -> (missing1, bind_distinct_names missing2 names1)
+    | ((name1, ty1) :: rest1, (name2, ty2) :: rest2) ->
+      begin match Ast.compare_names name1 name2 with
+      | 0 ->
+          unify loc ty1 ty2;
+          unify_names missing1 missing2 rest1 rest2
+
+      | x when x < 0 ->
+          unify_names missing1 (Ast.NameMap.add name1 ty1 missing2) rest1 names2
+
+      | x ->
+          unify_names (Ast.NameMap.add name2 ty2 missing1) missing2 names1 rest2
+      end
+  in
+
+  let (missing1, missing2) =
+      unify_names Ast.NameMap.empty Ast.NameMap.empty
+        (Ast.NameMap.bindings name_ty_map1)
+        (Ast.NameMap.bindings name_ty_map2)
+  in
+
+  match (Ast.NameMap.is_empty missing1, Ast.NameMap.is_empty missing2) with
+		| (true, true) -> unify loc rest_ty1 rest_ty2
+		| (true, false) -> unify loc (TyRowExtend (missing2, rest_ty1)) rest_ty2
+		| (false, true) -> unify loc rest_ty1 (TyRowExtend (missing1, rest_ty2))
+		| (false, false) ->
+				begin match rest_ty1 with
+					| TyRowEmpty ->
+							(* will result in an error *)
+							unify loc rest_ty1 (TyRowExtend (missing1, fresh_tyvar 0 ()))
+
+					| TyVar ({contents = Unbound (_, level)} as ty_ref) ->
+							let new_rest_row_var = fresh_tyvar level () in
+							unify loc rest_ty2 (TyRowExtend (missing2, new_rest_row_var));
+							begin match !ty_ref with
+								| Link _ -> Error.type_error loc "recursive types"
+								| _ -> ()
+              end;
+							unify loc rest_ty1 (TyRowExtend (missing1, new_rest_row_var))
+
+					| _ -> assert false
+        end
 
 and pairwise_unify loc tys = match tys with
   | [] -> ()
@@ -146,6 +305,7 @@ let rec generalize level ty =
   match ty with
   | TyVar {contents = Unbound(tyvar_id, tyvar_level)} when tyvar_level > level ->
 			TyVar (ref (Generic tyvar_id))
+	| TyVar {contents = Link ty} -> generalize level ty
 
 	| TyCon (name, param_tys) ->
 			TyCon (name, List.map (generalize level) param_tys)
@@ -153,11 +313,15 @@ let rec generalize level ty =
 	| TyFun (param_tys, ret_ty) ->
 			TyFun (List.map (generalize level) param_tys, generalize level ret_ty)
 
-	| TyVar {contents = Link ty} -> generalize level ty
+  | TyRecord tyrow -> TyRecord (generalize level tyrow)
+
+  | TyRowExtend (name_ty_map, rest_ty) ->
+        TyRowExtend (Ast.NameMap.map (generalize level) name_ty_map,
+                     generalize level rest_ty)
 
 	| TyVar {contents = Generic _}
-  | TyVar {contents = Unbound _} ->
-      ty
+  | TyVar {contents = Unbound _}
+  | TyRowEmpty as ty -> ty
 
 let rec instantiate level ty =
 	let generic_to_unbound = Hashtbl.create 10 in
@@ -171,7 +335,6 @@ let rec instantiate level ty =
 					Hashtbl.add generic_to_unbound gen_id tyvar;
 					tyvar
         end
-
 		| TyVar {contents = Unbound _} as ty -> ty
 
 		| TyCon (name, param_tys) ->
@@ -179,6 +342,13 @@ let rec instantiate level ty =
 
 		| TyFun (param_tys, ret_ty) ->
 				TyFun (List.map recurse param_tys, recurse ret_ty)
+
+    | TyRecord tyrow -> TyRecord (recurse tyrow)
+
+		| TyRowEmpty as ty -> ty
+
+		| TyRowExtend (name_ty_map, rest_ty) ->
+				TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
   in
   recurse ty
 
@@ -208,7 +378,14 @@ let rec suite_always_returns suite = match suite with
 let is_expansive = function
   (* TODO : when mutable values exist, List needs to make sure it
    * doesn't contain any mutable values *)
-  | Ast.Name _ | Ast.Num _ | Ast.List _ | Ast.Lambda _ -> false
+  | Ast.Name _
+  | Ast.Num _
+  | Ast.List _
+  | Ast.Lambda _
+  | Ast.Field _  (* TODO: change if getters & setters are added *)
+  | Ast.Record _ (* TODO: change this with mutable records *)
+    -> false
+
   | Ast.Call _ -> true
   | _ -> failwith "Type.is_expansive called on non-expression"
 
@@ -248,6 +425,26 @@ and infer level ty_env mut_env ast = match ast with
         unify l elem_ty (List.hd tys);
 
       list_ty elem_ty
+
+  | Ast.Record (l, name_ast_map) ->
+      let name_ty_map =
+				Ast.NameMap.map
+          (infer level ty_env mut_env)
+					name_ast_map
+			in
+      if Ast.NameMap.is_empty name_ty_map then
+        TyRecord TyRowEmpty
+      else
+        TyRecord (TyRowExtend (name_ty_map, TyRowEmpty))
+
+  | Ast.Field (l, ast, name) ->
+      let rest_ty = fresh_tyvar level () in
+			let field_ty = fresh_tyvar level () in
+			let record_ty = TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))
+      in
+			unify l record_ty (infer level ty_env mut_env ast);
+			field_ty
 
   | Ast.Lambda (l, param_names, ast) ->
       let param_tys = List.map (fresh_tyvar level) param_names in

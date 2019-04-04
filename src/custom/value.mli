@@ -1,8 +1,11 @@
+module FieldMap : Map.S with type key = string
+
 type value =
   | None
   | Bool of bool
   | Int of Z.t
   | List of value list
+  | Object of value FieldMap.t
   | Lambda of lambda * closure
   | Builtin of primop
 

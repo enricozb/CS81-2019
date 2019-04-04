@@ -1,7 +1,9 @@
 # typed_uscheme
 
 ## TODO
+- Clean up the stupid stuff at the bottom of lexer.mll
 - Add tuples
+- Add empty return
 - Add GADTs
 - Relax the value restriction according to
   [this paper](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)

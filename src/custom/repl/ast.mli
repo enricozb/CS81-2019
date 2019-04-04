@@ -1,9 +1,13 @@
 type name = string
 
+module NameMap : Map.S with type key = name
+
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
   | List of Loc.loc * (ast list)
+  | Record of Loc.loc * (ast NameMap.t)
+  | Field of Loc.loc * ast * name
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
@@ -25,3 +29,6 @@ val string_of_ast : ast -> string
 val loc_of_ast : ast -> Loc.loc
 val loc_of_ast_list : ast list -> Loc.loc
 val is_expr : ast -> bool
+
+val compare_names : string -> string -> int
+

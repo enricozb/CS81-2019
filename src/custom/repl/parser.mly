@@ -272,6 +272,9 @@ atom_expr:
     | [] -> $1
     | `Call (l, params) :: rest ->
       Ast.Call (l, iter rest, params)
+
+    | `Field (l, name) :: rest ->
+      Ast.Field (l, iter rest, name)
   in
   iter (List.rev $2)
   }
@@ -282,8 +285,17 @@ atom:
   | literal                 { $1 }
 
 literal:
-  | NUMBER                        { Ast.Num (fst $1, snd $1) }
-  | LBRACK expr_list_inner RBRACK { Ast.List (Loc.span $1 $3, $2) }
+  | NUMBER                              { Ast.Num (fst $1, snd $1) }
+  | LBRACK expr_list_inner RBRACK       { Ast.List (Loc.span $1 $3, $2) }
+  | LBRACE named_expr_list_inner RBRACE {
+    let name_ast_map =
+      List.fold_right
+        (fun (name, ast) map -> Ast.NameMap.add name ast map)
+        $2
+        Ast.NameMap.empty
+    in
+    Ast.Record (Loc.span $1 $3, name_ast_map)
+  }
 
 lambda:
   | name_list MAPSTO expr {
@@ -292,6 +304,9 @@ lambda:
 
 trailer_list:
   | { [] }
+  | DOT NAME trailer_list {
+    `Field (Loc.span $1 (fst $2), snd $2) :: $3
+  }
   | LPAREN expr_list_inner RPAREN trailer_list {
     `Call (Loc.span $1 $3, $2) :: $4
   }
@@ -300,4 +315,9 @@ expr_list_inner:
   | { [] }
   | expr                       { [$1] }
   | expr COMMA expr_list_inner { ($1 :: $3) }
+
+named_expr_list_inner:
+  | { [] }
+  | NAME COLON expr                             { [(snd $1, $3)] }
+  | NAME COLON expr COMMA named_expr_list_inner { ((snd $1, $3) :: $5) }
 

@@ -1,8 +1,10 @@
+import tests.fields
 import tests.functools
 import tests.if_and_return
 import tests.list
 import tests.loops
 import tests.math
 import tests.mutability
+import tests.syntax
 import tests.types
 

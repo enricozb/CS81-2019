@@ -1,8 +1,11 @@
+module FieldMap = Map.Make(String)
+
 type value =
   | None
   | Bool of bool
   | Int of Z.t
   | List of value list
+  | Object of value FieldMap.t
   | Lambda of lambda * closure
   | Builtin of primop
 
@@ -19,6 +22,16 @@ let rec string_of_value = function
   | Bool b -> string_of_bool b
   | Int i -> Z.to_string i
   | List values -> "[" ^ string_of_list values ^ "]"
+  | Object field_value_map ->
+      let obj_str =
+        String.concat ", " @@
+          List.map
+            (fun (field, value) ->
+              field ^ ": " ^ (string_of_value value))
+            (FieldMap.bindings field_value_map)
+      in
+      "{" ^ obj_str ^ "}"
+
   (* TODO *)
   | Lambda (lambda, closure) -> "<lambda>"
   | Builtin primop -> "<builtin>"

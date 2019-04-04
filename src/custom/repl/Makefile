@@ -13,7 +13,7 @@ OCAMLYACC  			 = menhir
 OCAMLYACC_FLAGS  = --table --explain
 OCAMLC	   			 = ocamlfind ocamlc
 
-FLAGS = -package menhirLib
+FLAGS = -g -package menhirLib
 
 SRC	       = loc ast parser lexer repl
 INTERFACES = $(patsubst %,%.cmi,${SRC})

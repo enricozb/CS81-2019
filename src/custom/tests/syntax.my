@@ -1,0 +1,48 @@
+# smoke tests for syntax. These will error out if the lexer is messed up
+
+def nested():
+  def nested():
+    def nested():
+      def nested():
+        def nested():
+          return none
+
+
+def spaces():
+
+  let x = 1
+
+      
+
+  while true:
+   if true:
+     if true:
+         if true:
+               if true:
+                break
+
+
+def multiline_parens():
+  let x = [1,
+  2,
+
+      3,
+
+   
+
+    4]
+
+  let y = {a: 1,
+  b: 2,
+
+      c:3,
+
+   
+    d:4}
+
+
+def end_deep_block_on_EOF():
+  def end_deep_block_on_EOF():
+    def end_deep_block_on_EOF():
+      def end_deep_block_on_EOF():
+        return none

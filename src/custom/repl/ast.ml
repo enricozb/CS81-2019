@@ -2,10 +2,27 @@ open Loc
 
 type name = string
 
+(* to guarantee lexicographical ordering *)
+let compare_names name1 name2 =
+	let compare_length = compare (String.length name1) (String.length name2) in
+	if compare_length = 0 then
+		String.compare name1 name2
+  else
+    compare_length
+
+
+module NameMap = Map.Make(
+	struct
+		type t = name
+		let compare = compare_names
+	end)
+
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
   | List of Loc.loc * (ast list)
+  | Record of Loc.loc * (ast NameMap.t)
+  | Field of Loc.loc * ast * name
   | Lambda of (Loc.loc * (name list) * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
@@ -42,14 +59,26 @@ and string_of_ast = function
 
   | Num (_, i) -> i
 
-  | List (_, exprs) ->
-      "[" ^ string_of_ast_list exprs ", " ^ "]"
+  | List (_, asts) ->
+      "[" ^ string_of_ast_list asts ", " ^ "]"
 
-  | Call (_, expr, params) ->
-      string_of_ast expr ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
+  | Record (_, name_ast_map) ->
+      let record_str =
+        String.concat ", " @@
+          List.map
+            (fun (name, ast) -> name ^ ": " ^ (string_of_ast ast))
+            (NameMap.bindings name_ast_map)
+      in
+      "{" ^ record_str ^ "}"
 
-  | Lambda (_, params, stmt) ->
-      "(" ^ string_of_str_list params ", " ^ ") -> " ^ string_of_ast stmt
+  | Field (_, ast, name) ->
+      "(" ^ (string_of_ast ast) ^ ")." ^ name
+
+  | Call (_, ast, params) ->
+      string_of_ast ast ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
+
+  | Lambda (_, params, ast) ->
+      "(" ^ string_of_str_list params ", " ^ ") -> " ^ string_of_ast ast
 
   | If (_, expr, true_body, false_body) ->
       "if " ^ string_of_ast expr ^ ": ... "
@@ -95,6 +124,8 @@ let loc_of_ast = function
   | Name (l, _)
   | Num (l, _)
   | List (l, _)
+  | Record (l, _)
+  | Field (l, _, _)
   | Call (l, _, _)
   | Lambda (l, _, _)
   | If (l, _, _, _)
@@ -121,19 +152,19 @@ let loc_of_ast_list = function
       in loc_of_ast_ (loc_of_ast ast) rest
 
 let is_expr = function
-  | Name _ | Num _ | List _ | Call _ | Lambda _ -> true
-  | If _ 
-  | While _ 
-  | Break _ 
-  | Continue _ 
-  | Assign _ 
-  | Bind _ 
-  | Def _ 
-  | Return _ 
-  | Suite _ 
-  | Import _ 
-  | CheckExpect _ 
-  | CheckError _ 
-  | CheckTypeError _ 
+  | Name _ | Num _ | List _ | Record _ | Call _ | Lambda _ | Field _ -> true
+  | If _
+  | While _
+  | Break _
+  | Continue _
+  | Assign _
+  | Bind _
+  | Def _
+  | Return _
+  | Suite _
+  | Import _
+  | CheckExpect _
+  | CheckError _
+  | CheckTypeError _
     -> false
 

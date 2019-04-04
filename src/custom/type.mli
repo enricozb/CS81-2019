@@ -1,14 +1,20 @@
 type id = string
 type level = int
+
 type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
+  | TyRecord of tyrow
+	| TyRowEmpty
+	| TyRowExtend of ty Ast.NameMap.t * tyrow
 
 and tyvar =
   | Link of ty
   | Unbound of id * level
   | Generic of id
+
+and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
 
 val string_of_type : ty -> string

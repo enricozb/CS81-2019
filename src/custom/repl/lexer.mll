@@ -166,8 +166,22 @@ rule token filename = parse
     decr paren_count;
     RPAREN (make_loc filename lexbuf)
   }
-  | ['['] { LBRACK (make_loc filename lexbuf) }
-  | [']'] { RBRACK (make_loc filename lexbuf) }
+  | ['['] {
+    incr paren_count;
+    LBRACK (make_loc filename lexbuf)
+  }
+  | [']'] {
+    decr paren_count;
+    RBRACK (make_loc filename lexbuf)
+  }
+  | ['{'] {
+    incr paren_count;
+    LBRACE (make_loc filename lexbuf)
+  }
+  | ['}'] {
+    decr paren_count;
+    RBRACE (make_loc filename lexbuf)
+  }
   | "!=" | operators+ as op {
     match op with
     (* These are to prevent <= and >= from becoming assignment operators *)
@@ -218,7 +232,18 @@ and newline filename = parse
                 | DEINDENT (loc, n) -> begin
                     cache := (replicate (n - 1) (DEDENT loc));
                     (DEDENT loc)
-                end
+                  end
+                | EOF ->
+                  state := CODE;
+                  begin match count_indent (make_loc filename lexbuf) 0 with
+                  | `Skip -> EOF
+                  | `Token (DEINDENT (loc, n)) ->
+                    cache := (replicate (n - 1) (DEDENT loc)) @ [EOF];
+                    (DEDENT loc)
+                  | `Token t ->
+                    cache := [EOF];
+                    t
+                  end
                 | token -> token
               end
           (* this disgusting logic is so in a REPL, two successive NEWLINEs
@@ -235,7 +260,7 @@ and newline filename = parse
               begin match token with
                 | DEINDENT (loc, n) ->
                   begin
-                    cache := (NEWLINE loc) :: (replicate (n - 1) (DEDENT loc));
+                    cache := (replicate (n - 1) (DEDENT loc)) @ [(NEWLINE loc)];
                     (DEDENT loc)
                   end
                 | token -> token
