@@ -46,8 +46,11 @@ and reduce_ast val_env frames = function
       (Ast ast, val_env, Frame.Field (l, field) :: frames)
 
   | Ast.Lambda (l, params, body_ast) ->
-      let value = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
-      (Value value, val_env, frames)
+      let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
+      let func_obj =
+        Value.Object (Value.FieldMap.singleton "__call__" lambda)
+      in
+      (Value func_obj, val_env, frames)
 
   | Ast.Call (l, ast, asts) ->
       (Ast ast, val_env, Frame.Apply (l, [], asts) :: frames)
@@ -59,9 +62,13 @@ and reduce_ast val_env frames = function
       (Ast ast, val_env, Frame.Assign (l, name) :: frames)
 
   | Ast.Def (l, name, params, suite) ->
-      let rec closure () = Env.bind name lambda val_env
-      and lambda =
-        Value.Const (Value.Lambda ((params, Ast.Suite(l, suite)), closure))
+      let rec closure () = Env.bind name (func_obj ()) val_env
+      (* TODO: absolutely no idea why func_obj needs to be a function here,
+       * the compiler complains and I can't have this recursive definition
+       * without this anonymous function *)
+      and func_obj = fun () ->
+        let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
+        Value.Const (Value.Object (Value.FieldMap.singleton "__call__" lambda))
       in
       (Value Value.None, closure (), frames)
 
@@ -181,9 +188,9 @@ and eval_val val_env frames value =
 
   | Frame.Apply (l, values_so_far, []) :: frames ->
       let values = List.rev (value :: values_so_far) in
-      let fun_value = List.hd values in
+      let callable_value = List.hd values in
       let param_values = List.tl values in
-      eval_call l fun_value param_values val_env frames
+      eval_call l callable_value param_values val_env frames
   | Frame.Apply (l, values_so_far, ast :: asts) :: frames ->
       (Ast ast, val_env, (Frame.Apply (l, value :: values_so_far, asts) :: frames))
 
@@ -202,26 +209,30 @@ and eval_val val_env frames value =
   | [] -> failwith "Eval.eval_val on empty frames"
 
 
-and eval_call l fun_value param_values val_env frames =
-  match fun_value with
-  | Value.Builtin primop ->
-     (Value (primop param_values l), val_env, frames)
+and eval_call l callable_value param_values val_env frames =
+  match callable_value with
+  | Value.Object callable ->
+    begin match Value.FieldMap.find_opt "__call__" callable with
+    | None -> Error.call_error l (Value.string_of_value callable_value)
+    | Some (Value.Builtin primop) ->
+       (Value (primop param_values l), val_env, frames)
 
-  | Value.Lambda ((params, body_ast), env_fn) ->
-      if List.length params <> List.length param_values then
-        Error.call_len_error l
-          (* TODO : get name of function or something *)
-          ~fun_ty: ("function")
-          ~expected:(List.length params)
-          ~provided:(List.length param_values)
-      else
-        let val_env' =
-          Env.bind_many
-            params
-            (List.map (fun v -> Value.Const v) param_values)
-            (env_fn ())
-        in
-        (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
-
-  | _ -> Error.call_error l (Value.string_of_value fun_value)
+    | Some (Value.Lambda ((params, body_ast), env_fn)) ->
+        if List.length params <> List.length param_values then
+          Error.call_len_error l
+            (* TODO : get name of function or something *)
+            ~fun_ty: ("function")
+            ~expected:(List.length params)
+            ~provided:(List.length param_values)
+        else
+          let val_env' =
+            Env.bind_many
+              params
+              (List.map (fun v -> Value.Const v) param_values)
+              (env_fn ())
+          in
+          (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
+    | _ -> Error.call_field_error l (Value.string_of_value callable_value)
+    end
+  | _ -> Error.call_error l (Value.string_of_value callable_value)
 

@@ -50,6 +50,12 @@ let call_len_error l ~fun_ty ~expected ~provided =
 let call_error l invalid_fun_ty =
   error l (TypeError ("'" ^ invalid_fun_ty ^ "' is not callable"))
 
+let call_field_error l invalid_fun_ty =
+  error l (TypeError (
+    "'" ^
+    invalid_fun_ty ^
+    "' has a __call__ field but this field is not a function"))
+
 let unreachable_code_error l flow =
   syntax_error l ("Code after '" ^ flow ^ "' is unreachable")
 

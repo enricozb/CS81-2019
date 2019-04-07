@@ -1,4 +1,6 @@
-let unary_fun ty f = Value.Builtin (fun vals loc ->
+let fun_obj f = Value.Object (Value.FieldMap.singleton "__call__" f)
+
+let unary_fun ty f = fun_obj (Value.Builtin (fun vals loc ->
   match vals with
   | [value] ->
     begin try
@@ -14,9 +16,9 @@ let unary_fun ty f = Value.Builtin (fun vals loc ->
         ~fun_ty: "builitn"
         ~expected: 1
         ~provided: (List.length vals)
-  )
+  ))
 
-let binary_fun ty1 ty2 f = Value.Builtin (fun vals loc ->
+let binary_fun ty1 ty2 f = fun_obj (Value.Builtin (fun vals loc ->
   match vals with
   | [value1; value2] ->
     begin try
@@ -34,7 +36,7 @@ let binary_fun ty1 ty2 f = Value.Builtin (fun vals loc ->
         ~fun_ty: "builitn"
         ~expected: 2
         ~provided: (List.length vals)
-  )
+  ))
 
 let num_num_to_num f =
   binary_fun
@@ -118,6 +120,19 @@ let print =
     Type.gen_var_ty
     (fun value -> Printf.printf "%s\n" (Value.string_of_value value); Value.None)
 
+let callable =
+  unary_fun
+    Type.gen_var_ty
+    (fun value -> match value with
+      | Value.Object fields ->
+        begin match Value.FieldMap.find_opt "__call__" fields with
+        | Some (Value.Builtin _)
+        | Some (Value.Lambda _) -> Value.Bool true
+        | _ -> Value.Bool false
+        end
+      | _ -> Value.Bool false
+    )
+
 let val_env = Env.bind_pairs
   (List.map (fun (name, v) -> (name, Value.Const v))
   [("len", len);
@@ -146,6 +161,8 @@ let val_env = Env.bind_pairs
    ("none", Value.None);
 
    ("print", print);
+
+   ("callable", callable);
   ]) Env.empty
 
 let mut_env = Env.map (fun name -> false) val_env
@@ -177,5 +194,7 @@ let ty_env = Env.bind_pairs
    ("none", Type.none_ty);
 
    ("print", Type.fun_ty [Type.gen_var_ty] Type.none_ty);
+
+   ("callable", Type.fun_ty [Type.gen_var_ty] Type.bool_ty);
   ] Env.empty
 

@@ -27,6 +27,7 @@ val call_len_error : Loc.loc ->
                      expected : int ->
                      provided : int -> 'a
 val call_error : Loc.loc -> string -> 'a
+val call_field_error : Loc.loc -> string -> 'a
 
 
 val unreachable_code_error : Loc.loc -> string -> 'a

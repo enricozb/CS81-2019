@@ -1,4 +1,4 @@
-(* ---- TYPES ---- *)
+(* --------------------------------- TYPES --------------------------------- *)
 type id = string
 type level = int
 
@@ -21,7 +21,7 @@ let rec real_ty = function
   | TyVar {contents = Link ty} -> real_ty ty
   | ty -> ty
 
-(* ---- ROW/RECORDS ---- *)
+(* ------------------------------ ROW/RECORDS ------------------------------ *)
 let merge_name_ty_maps name_map1 name_map2 =
 	Ast.NameMap.merge
 		(fun name maybe_ty_list1 maybe_ty_list2 ->
@@ -92,7 +92,7 @@ let rec string_of_type ty =
 
     | TyCon (id, []) -> id
     | TyCon (id, param_tys) ->
-        id ^ "<" ^ (recurse_tys param_tys) ^ ">"
+        id ^ "[" ^ (recurse_tys param_tys) ^ "]"
 
     | TyFun (param_tys, ret_ty) ->
         (* to force evaluation of params first *)
@@ -163,8 +163,6 @@ let rec occurs loc tyvar_id tyvar_level ty =
 				recurse rest_ty
 
 
-
-(* TODO : remove unit param from `fresh_tyvar` *)
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =
   incr fresh_counter;
@@ -178,10 +176,28 @@ let bool_ty = TyCon ("Bool", [])
 let int_ty = TyCon ("Int", [])
 let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
-let fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
+let prim_fun_ty param_tys ret_ty =
+  TyCon ("PrimitiveFunction", (param_tys @ [ret_ty]))
+let fun_ty param_tys ret_ty =
+  let prim_fun_ty = prim_fun_ty param_tys ret_ty in
+  TyRecord (
+    TyRowExtend (
+      Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
+      TyRowEmpty
+    )
+  )
+
+let callable_ty level param_tys ret_ty =
+  let prim_fun_ty = prim_fun_ty param_tys ret_ty in
+  TyRecord (
+    TyRowExtend (
+      Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
+      fresh_tyvar level ()
+    )
+  )
 
 
-(* ---- UNIFICATION ---- *)
+(* ------------------------------ UNIFICATION ------------------------------ *)
 let rec unify loc ty1 ty2 =
   let unify = unify loc in
   if ty1 == ty2 then
@@ -300,7 +316,7 @@ and pairwise_unify loc tys = match tys with
       pairwise_unify loc (ty2 :: tys)
 
 
-(* ---- GENERALIZATION & INSTANTIATION ---- *)
+(* -------------------- GENERALIZATION & INSTANTIATION -------------------- *)
 let rec generalize level ty =
   match ty with
   | TyVar {contents = Unbound(tyvar_id, tyvar_level)} when tyvar_level > level ->
@@ -353,7 +369,7 @@ let rec instantiate level ty =
   recurse ty
 
 
-(* ---- SUITE FUNCTIONS ---- *)
+(* ---------------------------- SUITE FUNCTIONS ---------------------------- *)
 
 (* returns true if all branches of this suite return *)
 let rec suite_always_returns suite = match suite with
@@ -374,7 +390,7 @@ let rec suite_always_returns suite = match suite with
   | _ :: rest -> suite_always_returns rest
 
 
-(* ---- VALUE RESTRICTION ---- *)
+(* --------------------------- VALUE RESTRICTION --------------------------- *)
 let is_expansive = function
   (* TODO : when mutable values exist, List needs to make sure it
    * doesn't contain any mutable values *)
@@ -383,14 +399,14 @@ let is_expansive = function
   | Ast.List _
   | Ast.Lambda _
   | Ast.Field _  (* TODO: change if getters & setters are added *)
-  | Ast.Record _ (* TODO: change this with mutable records *)
     -> false
 
+  | Ast.Record _ (* TODO: change this with mutable records *)
   | Ast.Call _ -> true
   | _ -> failwith "Type.is_expansive called on non-expression"
 
 
-(* ---- TYPE-CHECKING ---- *)
+(* ----------------------------- TYPE-CHECKING ----------------------------- *)
 (* properties of suites returned on typecheck_suite *)
 type suite_props =
     { ret_tys    : ty list;
@@ -480,8 +496,8 @@ and infer level ty_env mut_env ast = match ast with
       let param_tys = List.map (infer level ty_env mut_env) param_asts in
       let ret_ty = fresh_tyvar level () in
 
-      (* equate type of function with (tys -> ret_ty) *)
-      unify l t1 (fun_ty param_tys ret_ty);
+      (* equate type of function with (param_tys -> ret_ty) *)
+      unify l t1 (callable_ty level param_tys ret_ty);
       ret_ty
 
   | Ast.Bind (l, mut, id, ast) ->
@@ -503,8 +519,7 @@ and infer level ty_env mut_env ast = match ast with
       unify l ast_ty (Env.lookup l id ty_env);
       ast_ty
 
-  (* TODO : i have literally no idea how to do this, i have no idea if
-    * this is correct at all... *)
+  (* TODO : do a thorough check of whether or not the level logic is correct *)
   | Ast.Def (l, name, params, suite) ->
       let functype = fresh_tyvar (level + 1) () in
       let param_tys = List.map (fresh_tyvar (level + 1)) params in
