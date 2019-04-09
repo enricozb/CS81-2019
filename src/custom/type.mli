@@ -8,6 +8,8 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
+  | TyFold of (string option) * ty   (* for recursive types, namely classes *)
+  | TyUnfold of ty
 
 and tyvar =
   | Link of ty

@@ -6,10 +6,11 @@ type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
-  (*| Ty*)
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
+  | TyFold of (string option) * ty   (* for recursive types, namely classes *)
+  | TyUnfold of ty
 
 and tyvar =
   | Link of ty
@@ -128,6 +129,12 @@ let rec string_of_type ty =
 				in
 				name_ty_map_str ^ rest_ty_str
 
+    | TyFold (Some name, _) -> name
+    | TyFold (None, ty) -> "Fold(" ^ recurse ty ^ ")"
+
+    | TyUnfold (TyFold (_, ty)) -> recurse ty
+    | TyUnfold (_) -> "Unfold(" ^ recurse ty ^ ")"
+
   in
   recurse ~toplevel:true ty
 
@@ -163,6 +170,9 @@ let rec occurs loc tyvar_id tyvar_level ty =
         Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
 				recurse rest_ty
 
+    | TyFold (_, ty) ->
+        recurse ty
+
 
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =
@@ -178,24 +188,23 @@ let int_ty = TyCon ("Int", [])
 let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
-  (*TyCon ("PrimitiveFunction", (param_tys @ [ret_ty]))*)
 let fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyRecord (
+  TyFold (None, TyRecord (
     TyRowExtend (
       Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
       TyRowEmpty
     )
-  )
+  ))
 
 let callable_ty level param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyRecord (
+  TyFold (None, TyRecord (
     TyRowExtend (
       Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
       fresh_tyvar level ()
     )
-  )
+  ))
 
 
 (* ------------------------------ UNIFICATION ------------------------------ *)
@@ -245,6 +254,18 @@ let rec unify loc ty1 ty2 =
     | TyRowExtend (name_ty_map, _), TyRowEmpty ->
 				let field, _ = Ast.NameMap.choose name_ty_map in
 				Error.missing_field loc field
+
+    | TyUnfold (TyFold (_, ty1)), ty2
+    | ty1, TyUnfold (TyFold (_, ty2)) ->
+        unify ty1 ty2
+
+    | TyFold (_, ty1), TyFold (_, ty2) ->
+        unify ty1 ty2
+
+    | TyFold (Some name1, _), TyCon (name2, params)
+    | TyCon (name1, params), TyFold (Some name2, _)
+      when name1 = name2 && List.length params = 0 ->
+          ()
 
     | (ty1, ty2) ->
         Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
@@ -339,6 +360,11 @@ let rec generalize level ty =
 	| TyVar {contents = Generic _}
   | TyVar {contents = Unbound _}
   | TyRowEmpty as ty -> ty
+  | TyFold (name, ty) ->
+      TyFold (name, generalize level ty)
+
+  | TyUnfold _ ->
+      failwith "Type.generalize on TyUnfold"
 
 let rec instantiate level ty =
 	let generic_to_unbound = Hashtbl.create 10 in
@@ -366,6 +392,12 @@ let rec instantiate level ty =
 
 		| TyRowExtend (name_ty_map, rest_ty) ->
 				TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
+
+  | TyFold (name, ty) ->
+      TyFold (name, recurse ty)
+
+  | TyUnfold _ ->
+      failwith "Type.instantiate on TyUnfold"
   in
   recurse ty
 
@@ -450,15 +482,15 @@ and infer level ty_env mut_env ast = match ast with
 					name_ast_map
 			in
       if Ast.NameMap.is_empty name_ty_map then
-        TyRecord TyRowEmpty
+        TyFold (None, TyRecord TyRowEmpty)
       else
-        TyRecord (TyRowExtend (name_ty_map, TyRowEmpty))
+        TyFold (None, TyRecord (TyRowExtend (name_ty_map, TyRowEmpty)))
 
   | Ast.Field (l, ast, name) ->
       let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))
+			let record_ty = TyFold (None, TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))
       in
 			unify l record_ty (infer level ty_env mut_env ast);
 			field_ty
@@ -510,7 +542,7 @@ and infer level ty_env mut_env ast = match ast with
         generalize level ty
 
   | Ast.Assign (l, id, ast) ->
-      (* TODO: really not sure about this level ... notice it is not +1 like
+      (* TODO: really not sure about this level ... Notice it is not +1 like
        * in Ast.Bind. Because I don't really think this is a let-in type
        * expression. *)
       if not (Env.lookup l id mut_env) then
