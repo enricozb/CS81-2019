@@ -173,6 +173,9 @@ let rec occurs loc tyvar_id tyvar_level ty =
     | TyFold (_, ty) ->
         recurse ty
 
+    | TyUnfold _ ->
+        failwith "Type.occurs on TyUnfold"
+
 
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =

@@ -30,6 +30,7 @@
     | CONTINUE _ -> "continue"
     | DEF _ -> "def"
     | RETURN _ -> "return"
+    | CLASS _ -> "class"
     | DOT _ -> "."
     | COLON _ -> ":"
     | QUOTE _ -> "'"
@@ -62,6 +63,7 @@
     | "continue" -> CONTINUE loc
     | "def" -> DEF loc
     | "return" -> RETURN loc
+    | "class" -> CLASS loc
     | "and" -> OPERATOR (loc, "and")
     | "or" -> OPERATOR (loc, "or")
     | id -> NAME (loc, id)
@@ -238,8 +240,13 @@ and newline filename = parse
                   begin match count_indent (make_loc filename lexbuf) 0 with
                   | `Skip -> EOF
                   | `Token (DEINDENT (loc, n)) ->
-                    cache := (replicate (n - 1) (DEDENT loc)) @ [EOF];
-                    (DEDENT loc)
+                      begin match !mode with
+                        | FILE ->
+                          cache := (replicate (n - 1) (DEDENT loc)) @ [EOF];
+                          (DEDENT loc)
+                        | REPL ->
+                            EOF
+                      end
                   | `Token t ->
                     cache := [EOF];
                     t
