@@ -15,10 +15,12 @@ default: compile
 .PHONY: compile test clean
 
 compile:
+	make -C repl/
 	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} -c ${MLI}
 	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} -c ${ML}
 	ocamlfind ocamlc ${FLAGS} -I ${LIBDIR} ${LIBS} ${CMO} -o ${NAME}
 
 clean:
+	make -C repl clean
 	rm -f ./${NAME}
 	rm -f *.cmi *.cmo
