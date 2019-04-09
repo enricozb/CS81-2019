@@ -6,6 +6,7 @@ type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
+  (*| Ty*)
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
@@ -176,8 +177,8 @@ let bool_ty = TyCon ("Bool", [])
 let int_ty = TyCon ("Int", [])
 let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
-let prim_fun_ty param_tys ret_ty =
-  TyCon ("PrimitiveFunction", (param_tys @ [ret_ty]))
+let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
+  (*TyCon ("PrimitiveFunction", (param_tys @ [ret_ty]))*)
 let fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
   TyRecord (

@@ -10,6 +10,11 @@ def h(x):
 def id_abc(x):
   return {a: f(x), b: g(x), c: h(x)}
 
+def nested(x):
+  return x.a.b.c.d.e.f.g
+
 check_expect id_abc({a: 1, b: true, c: []}), {a: 1, b: true, c: []}
 check_type_error id_abc({a: 1, b: true})
+let x = {a:{b:{c:{d:{e:{f:{g:[1, 2, 3]}}}}}}}
+check_expect nested(x), [1, 2, 3]
 

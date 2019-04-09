@@ -68,7 +68,10 @@ let parse_repl () =
         (Parser.Incremental.single_input lexbuf.lex_curr_p)
     with
       | ParseIncomplete -> begin
-        loop_until_parse (str ^ (read_line_with_prompt "... "))
+        if String.trim str = "" then
+          loop_until_parse (read_line_with_prompt ">>> ")
+        else
+          loop_until_parse (str ^ (read_line_with_prompt "... "))
       end
       | Lexer.SyntaxError loc ->
         let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
