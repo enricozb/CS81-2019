@@ -9,7 +9,7 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of (string option) * ty   (* for recursive types, namely classes *)
+  | TyFold of (string option) * (ty Lazy.t) (* for recursive types, namely classes *)
   | TyUnfold of ty
 
 and tyvar =
@@ -130,9 +130,9 @@ let rec string_of_type ty =
 				name_ty_map_str ^ rest_ty_str
 
     | TyFold (Some name, _) -> name
-    | TyFold (None, ty) -> "Fold(" ^ recurse ty ^ ")"
+    | TyFold (None, ty) -> recurse (Lazy.force ty)
 
-    | TyUnfold (TyFold (_, ty)) -> recurse ty
+    | TyUnfold (TyFold (_, ty)) -> recurse (Lazy.force ty)
     | TyUnfold (_) -> "Unfold(" ^ recurse ty ^ ")"
 
   in
@@ -170,8 +170,10 @@ let rec occurs loc tyvar_id tyvar_level ty =
         Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
 				recurse rest_ty
 
-    | TyFold (_, ty) ->
-        recurse ty
+    (* TODO: this has to change for generic classes *)
+    | TyFold (Some name, ty) -> ()
+    | TyFold (None, ty) ->
+        recurse (Lazy.force ty)
 
     | TyUnfold _ ->
         failwith "Type.occurs on TyUnfold"
@@ -182,33 +184,65 @@ and fresh_tyvar level _ =
   incr fresh_counter;
   TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level)}
 
-
 (* common types *)
 let gen_var_ty = TyVar {contents = Generic "a"}
+let gen_var_ty2 = TyVar {contents = Generic "b"}
 let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
-let int_ty = TyCon ("Int", [])
+let prim_int_ty = TyCon ("int", [])
+let int_ty = TyCon ("int", [])
 let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 let fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyFold (None, TyRecord (
+  TyFold (None, lazy (TyRecord (
     TyRowExtend (
-      Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
+      Ast.NameMap.singleton "__call__" prim_fun_ty,
       TyRowEmpty
     )
-  ))
+  )))
 
-let callable_ty level param_tys ret_ty =
+let callable_ty ?(level=0) param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyFold (None, TyRecord (
+  TyFold (None, lazy (TyRecord (
     TyRowExtend (
-      Ast.NameMap.add "__call__" prim_fun_ty Ast.NameMap.empty,
+      Ast.NameMap.singleton "__call__" prim_fun_ty,
       fresh_tyvar level ()
     )
-  ))
+  )))
 
+let bare_record_ty name_ty_list =
+  TyRecord (
+    TyRowExtend (
+      List.fold_left
+        (fun name_ty_map (name, ty) ->
+          assert (not (Ast.NameMap.mem name name_ty_map));
+          Ast.NameMap.add name ty name_ty_map)
+      Ast.NameMap.empty name_ty_list,
+      TyRowEmpty
+    )
+  )
+
+let folded_record_ty name name_ty_list =
+  TyFold (name, lazy (TyRecord (
+    TyRowExtend (
+      List.fold_left
+        (fun name_ty_map (name, ty) ->
+          assert (not (Ast.NameMap.mem name name_ty_map));
+          Ast.NameMap.add name ty name_ty_map)
+      Ast.NameMap.empty name_ty_list,
+      TyRowEmpty
+    )
+  )))
+
+let has_field_ty ?(level=0) field ty =
+  TyFold (None, lazy (TyRecord (
+    TyRowExtend (
+      Ast.NameMap.singleton field ty,
+      fresh_tyvar level ()
+    )
+  )))
 
 (* ------------------------------ UNIFICATION ------------------------------ *)
 let rec unify loc ty1 ty2 =
@@ -259,11 +293,12 @@ let rec unify loc ty1 ty2 =
 				Error.missing_field loc field
 
     | TyUnfold (TyFold (_, ty1)), ty2
-    | ty1, TyUnfold (TyFold (_, ty2)) ->
-        unify ty1 ty2
+    | ty2, TyUnfold (TyFold (_, ty1)) ->
+        unify (Lazy.force ty1) ty2
 
+    (* TODO: should this check the names? *)
     | TyFold (_, ty1), TyFold (_, ty2) ->
-        unify ty1 ty2
+          unify (Lazy.force ty1) (Lazy.force ty2)
 
     | TyFold (Some name1, _), TyCon (name2, params)
     | TyCon (name1, params), TyFold (Some name2, _)
@@ -362,9 +397,14 @@ let rec generalize level ty =
 
 	| TyVar {contents = Generic _}
   | TyVar {contents = Unbound _}
+
   | TyRowEmpty as ty -> ty
-  | TyFold (name, ty) ->
-      TyFold (name, generalize level ty)
+
+  | TyFold (None, ty) ->
+      TyFold (None, lazy (generalize level (Lazy.force ty)))
+  | TyFold (Some name, ty) ->
+      (* TODO: this has to change for generic classes *)
+      TyFold (Some name, ty)
 
   | TyUnfold _ ->
       failwith "Type.generalize on TyUnfold"
@@ -396,8 +436,11 @@ let rec instantiate level ty =
 		| TyRowExtend (name_ty_map, rest_ty) ->
 				TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
 
-  | TyFold (name, ty) ->
-      TyFold (name, recurse ty)
+  | TyFold (None, ty) ->
+      TyFold (None, lazy (recurse (Lazy.force ty)))
+  | TyFold (Some name, ty) ->
+      (* TODO: this has to change for generic classes *)
+      TyFold (Some name, ty)
 
   | TyUnfold _ ->
       failwith "Type.instantiate on TyUnfold"
@@ -485,15 +528,15 @@ and infer level ty_env mut_env ast = match ast with
 					name_ast_map
 			in
       if Ast.NameMap.is_empty name_ty_map then
-        TyFold (None, TyRecord TyRowEmpty)
+        TyFold (None, lazy (TyRecord TyRowEmpty))
       else
-        TyFold (None, TyRecord (TyRowExtend (name_ty_map, TyRowEmpty)))
+        TyFold (None, lazy (TyRecord (TyRowExtend (name_ty_map, TyRowEmpty))))
 
   | Ast.Field (l, ast, name) ->
       let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyFold (None, TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))
+			let record_ty = TyFold (None, lazy (TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
       in
 			unify l record_ty (infer level ty_env mut_env ast);
 			field_ty
@@ -533,7 +576,7 @@ and infer level ty_env mut_env ast = match ast with
       let ret_ty = fresh_tyvar level () in
 
       (* equate type of function with (param_tys -> ret_ty) *)
-      unify l t1 (callable_ty level param_tys ret_ty);
+      unify l t1 (callable_ty ~level:level param_tys ret_ty);
       ret_ty
 
   | Ast.Bind (l, mut, id, ast) ->
@@ -591,6 +634,9 @@ and infer level ty_env mut_env ast = match ast with
 
   | Ast.Return (l, _) ->
       Error.return_outside_def l;
+
+  (*| Ast.Class (l, name, suite) ->*)
+      (*let instance_funcs, class_funcs = Ast.class_split_suite suite in*)
 
   | Ast.Continue l | Ast.Break l ->
       Error.flow_outside_loop l;

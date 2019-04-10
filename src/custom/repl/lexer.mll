@@ -19,6 +19,7 @@
     | NUMBER (_, i) -> i
     | CHECKEXPECT _ -> "check_expect"
     | CHECKERROR _ -> "check_error"
+    | CHECKTYPE _ -> "check_type"
     | CHECKTYPEERROR _ -> "check_type_error"
     | IMPORT _ -> "import"
     | LET _ -> "let"
@@ -52,6 +53,7 @@
   let name loc = function
     | "check_expect" -> CHECKEXPECT loc
     | "check_error" -> CHECKERROR loc
+    | "check_type" -> CHECKTYPE loc
     | "check_type_error" -> CHECKTYPEERROR loc
     | "import" -> IMPORT loc
     | "let" -> LET loc
@@ -154,7 +156,7 @@ rule token filename = parse
   | '.' { DOT (make_loc filename lexbuf) }
   | ',' { COMMA (make_loc filename lexbuf) }
   | ''' { QUOTE (make_loc filename lexbuf) }
-  | ['a'-'z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
+  | ['a'-'z' 'A'-'Z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
     name (make_loc filename lexbuf) id
   }
   | ['-']?['0'-'9']+ as num {

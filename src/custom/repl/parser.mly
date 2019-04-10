@@ -10,8 +10,10 @@
     | CONTINUE l
     | DEF l
     | RETURN l
+    | CLASS l
     | CHECKEXPECT l
     | CHECKERROR l
+    | CHECKTYPE l
     | CHECKTYPEERROR l
     | IMPORT l
     | COLON l
@@ -103,13 +105,14 @@
 
 %token <Loc.loc * string> NAME
 %token <Loc.loc * string> NUMBER
-%token <Loc.loc> CHECKEXPECT CHECKERROR CHECKTYPEERROR
+%token <Loc.loc> CHECKEXPECT CHECKERROR CHECKTYPE CHECKTYPEERROR
 %token <Loc.loc> IMPORT
 %token <Loc.loc> LET MUT
 %token <Loc.loc> IF ELSE
 %token <Loc.loc> WHILE CONTINUE BREAK
 %token <Loc.loc> DEF
 %token <Loc.loc> RETURN
+%token <Loc.loc> CLASS
 %token <Loc.loc> COLON DOT
 %token <Loc.loc> EQUALS MAPSTO
 %token <Loc.loc> COMMA QUOTE
@@ -165,9 +168,11 @@ check_stmt:
   | CHECKEXPECT expr COMMA expr   {
     Ast.CheckExpect (Loc.span $1 (Ast.loc_of_ast $4), $2, $4)
   }
-  (* TODO types don't carry locs, so I can't span here... *)
   | CHECKERROR expr {
     Ast.CheckError (Loc.span $1 (Ast.loc_of_ast $2), $2)
+  }
+  | CHECKTYPE expr {
+    Ast.CheckType (Loc.span $1 (Ast.loc_of_ast $2), $2)
   }
   | CHECKTYPEERROR expr {
     Ast.CheckTypeError (Loc.span $1 (Ast.loc_of_ast $2), $2)
@@ -214,11 +219,11 @@ flow_stmt:
   | CONTINUE { Ast.Continue $1 }
 
 compound_stmt:
-  | if_stmt                 { $1 }
-  | while_stmt              { $1 }
-  | funcdef                 { $1 }
+  | if_stmt    { $1 }
+  | while_stmt { $1 }
+  | funcdef    { $1 }
+  | classdef   { $1 }
 
-(* TODO disallow stuff like `if True: x else: y` in one line *)
 if_stmt:
   | IF expr COLON suite {
     Ast.If (Loc.span $1 (Ast.loc_of_ast_list $4),
@@ -239,6 +244,12 @@ funcdef:
   | DEF NAME name_list COLON suite {
     Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $5),
              snd $2, snd $3, $5)
+  }
+
+classdef:
+  | CLASS NAME COLON suite {
+    let l = Loc.span $1 (Ast.loc_of_ast_list $4) in
+    Ast.Class (l, snd $2, $4)
   }
 
 name_list:
@@ -285,7 +296,10 @@ atom:
   | literal                 { $1 }
 
 literal:
-  | NUMBER                              { Ast.Num (fst $1, snd $1) }
+  | NUMBER {
+    let loc = fst $1 in
+    Ast.Call (loc, Ast.Name (loc, "Int"), [Ast.Num (fst $1, snd $1)])
+  }
   | LBRACK expr_list_inner RBRACK       { Ast.List (Loc.span $1 $3, $2) }
   | LBRACE named_expr_list_inner RBRACE {
     let name_ast_map =

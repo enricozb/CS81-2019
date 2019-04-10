@@ -41,6 +41,15 @@ let run_check (ty_env, mut_env, val_env) ast =
       _ -> true
     end
 
+  | Ast.CheckType (l, ast) ->
+    begin
+      let (_, _, ty) = Type.typecheck ~level:!curr_level ty_env mut_env ast in
+      Printf.printf "%s\n" (Type.string_of_type ty);
+      true
+    (*with*)
+      (*_ -> false*)
+    end
+
   | Ast.CheckTypeError (l, ast) ->
     begin try
       ignore (Type.typecheck ~level:!curr_level ty_env mut_env ast);
@@ -60,7 +69,10 @@ let run_check (ty_env, mut_env, val_env) ast =
 
 let rec run ?(quiet=false) (ty_env, mut_env, val_env) ast =
   match ast with
-  | Ast.CheckExpect _ | Ast.CheckError _ | Ast.CheckTypeError _ ->
+  | Ast.CheckExpect _
+  | Ast.CheckError _
+  | Ast.CheckType _
+  | Ast.CheckTypeError _ ->
       run_check (ty_env, mut_env, val_env) ast
 
   | Ast.Import (l, name) ->

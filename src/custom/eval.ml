@@ -33,14 +33,16 @@ and reduce_ast val_env frames = function
   | Ast.List (l, ast :: asts) ->
       (Ast ast, val_env, Frame.List (l, [], asts) :: frames)
 
+  (* TODO: the usage of the hash-table here is really bad... *)
   | Ast.Record (l, field_ast_map) when Ast.NameMap.is_empty field_ast_map ->
-      (Value (Value.Object Value.FieldMap.empty), val_env, frames)
+      (Value (Value.Object (BatHashtbl.create 0)), val_env, frames)
   | Ast.Record (l, field_ast_map) ->
+      let num_bindings = Ast.NameMap.cardinal field_ast_map in
       let (field, ast) = Ast.NameMap.choose field_ast_map in
       let field_ast_map = Ast.NameMap.remove field field_ast_map in
       (Ast ast,
        val_env,
-       Frame.Object (l, field, Value.FieldMap.empty, field_ast_map) :: frames)
+       Frame.Object (l, field, BatHashtbl.create num_bindings, field_ast_map) :: frames)
 
   | Ast.Field (l, ast, field) ->
       (Ast ast, val_env, Frame.Field (l, field) :: frames)
@@ -48,7 +50,7 @@ and reduce_ast val_env frames = function
   | Ast.Lambda (l, params, body_ast) ->
       let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
       let func_obj =
-        Value.Object (Value.FieldMap.singleton "__call__" lambda)
+        Value.Object (BatHashtbl.of_list [("__call__", lambda)])
       in
       (Value func_obj, val_env, frames)
 
@@ -68,7 +70,7 @@ and reduce_ast val_env frames = function
        * without this anonymous function *)
       and func_obj = fun () ->
         let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
-        Value.Const (Value.Object (Value.FieldMap.singleton "__call__" lambda))
+        Value.Const (Value.Object (BatHashtbl.of_list [("__call__", lambda)]))
       in
       (Value Value.None, closure (), frames)
 
@@ -138,11 +140,11 @@ and eval_val val_env frames value =
 
   | Frame.Object (l, name, field_value_map, field_ast_map) :: frames
     when Ast.NameMap.is_empty field_ast_map ->
-      let field_value_map = Value.FieldMap.add name value field_value_map in
+      BatHashtbl.add field_value_map name value;
       (Value (Value.Object field_value_map), val_env, frames)
   | Frame.Object (l, field, field_value_map, field_ast_map) :: frames ->
       (* add just computed field to map *)
-      let field_value_map = Value.FieldMap.add field value field_value_map in
+      BatHashtbl.add field_value_map field value;
       (* get next field and ast to compute *)
       let (field, ast) = Ast.NameMap.choose field_ast_map in
       let field_ast_map = Ast.NameMap.remove field field_ast_map in
@@ -153,7 +155,7 @@ and eval_val val_env frames value =
   | Frame.Field (l, field) :: frames ->
       begin match value with
       | Object field_value_map ->
-          begin match Value.FieldMap.find_opt field field_value_map with
+          begin match BatHashtbl.find_option field_value_map field with
           | None ->
               Error.runtime_error
                 l
@@ -212,7 +214,7 @@ and eval_val val_env frames value =
 and eval_call l callable_value param_values val_env frames =
   match callable_value with
   | Value.Object callable ->
-    begin match Value.FieldMap.find_opt "__call__" callable with
+    begin match BatHashtbl.find_option callable "__call__" with
     | None -> Error.call_error l (Value.string_of_value callable_value)
     | Some (Value.Builtin primop) ->
        (Value (primop param_values l), val_env, frames)

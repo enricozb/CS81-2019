@@ -33,10 +33,12 @@ type ast =
   | Continue of Loc.loc
   | Def of (Loc.loc * name * (name list) * (ast list))
   | Return of (Loc.loc * ast)
+  | Class of (Loc.loc * name * (ast list))
   | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)
   | CheckError of (Loc.loc * ast)
+  | CheckType of (Loc.loc * ast)
   | CheckTypeError of (Loc.loc * ast)
 
 let rec string_of_str_list lst sep =
@@ -104,6 +106,9 @@ and string_of_ast = function
   | Return (_, ast) ->
       "return " ^ (string_of_ast ast)
 
+  | Class (_, name, suite) ->
+      "class " ^ name ^ ": ..."
+
   | Import (_, name) ->
       "import " ^ name
 
@@ -114,6 +119,9 @@ and string_of_ast = function
 
   | CheckError (l, ast) ->
       "check_error " ^ string_of_ast ast
+
+  | CheckType (l, ast) ->
+      "check_type " ^ string_of_ast ast
 
   | CheckTypeError (l, ast) ->
       "check_type_error " ^ string_of_ast ast
@@ -136,15 +144,17 @@ let loc_of_ast = function
   | Bind (l, _, _, _)
   | Def (l, _, _, _)
   | Return (l, _)
+  | Class (l, _, _)
   | Suite (l, _)
   | Import (l, _)
   | CheckExpect (l, _, _)
   | CheckError (l, _)
+  | CheckType (l, _)
   | CheckTypeError (l, _)
     -> l
 
 let loc_of_ast_list = function
-  | [] -> failwith "loc_of_ast_list with empty list"
+  | [] -> failwith "loc of ast list with empty list"
   | ast :: rest ->
       let rec loc_of_ast_ loc = function
         | [] -> loc
@@ -161,10 +171,23 @@ let is_expr = function
   | Bind _
   | Def _
   | Return _
+  | Class _
   | Suite _
   | Import _
   | CheckExpect _
   | CheckError _
+  | CheckType _
   | CheckTypeError _
     -> false
+
+let rec class_split_suite = function
+  | [] -> ([], [])
+  | (Def (_, _, "self" :: _, _) as def) :: rest ->
+      let instance_funcs, class_funcs = class_split_suite rest in
+      (def :: instance_funcs, class_funcs)
+
+  | (Def (_, _, _, _) as def) :: rest ->
+      let instance_funcs, class_funcs = class_split_suite rest in
+      (instance_funcs, def :: class_funcs)
+  | _ -> failwith "Ast.class_split_suite contains non defs"
 

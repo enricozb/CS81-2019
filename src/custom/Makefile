@@ -2,7 +2,7 @@ NAME = myth
 INCS = repl/*.cmi
 LIBS = repl.cma
 LIBDIR = repl
-FLAGS = -g -package zarith -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
+FLAGS = -g -package batteries -package zarith -package menhirLib -linkpkg -I $(LIBDIR) $(LIBS)
 
 SRC = error env type value basis frame eval
 

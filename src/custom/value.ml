@@ -1,13 +1,13 @@
-module FieldMap = Map.Make(String)
-
 type value =
   | None
   | Bool of bool
   | Int of Z.t
   | List of value list
-  | Object of value FieldMap.t
+  | Object of name_value_map
   | Lambda of lambda * closure
   | Builtin of primop
+
+and name_value_map = (string, value) BatHashtbl.t
 
 and env_value =
   | Const of value
@@ -28,7 +28,7 @@ let rec string_of_value = function
           List.map
             (fun (field, value) ->
               field ^ ": " ^ (string_of_value value))
-            (FieldMap.bindings field_value_map)
+            (BatHashtbl.bindings field_value_map)
       in
       "{" ^ obj_str ^ "}"
 
@@ -46,4 +46,6 @@ let truthy l = function
       Error.type_mismatch_error l
                           ~expected: "Bool"
                           ~provided: (string_of_value value)
+
+let build_object fields = Object (BatHashtbl.of_list fields)
 

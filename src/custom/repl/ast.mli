@@ -18,10 +18,12 @@ type ast =
   | Continue of Loc.loc
   | Def of (Loc.loc * name * (name list) * (ast list))
   | Return of (Loc.loc * ast)
-  | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
+  | Class of (Loc.loc * name * (ast list))
+  | Suite of (Loc.loc * (ast list)) (* used only outside of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)
   | CheckError of (Loc.loc * ast)
+  | CheckType of (Loc.loc * ast)
   | CheckTypeError of (Loc.loc * ast)
 
 val string_of_ast : ast -> string
@@ -31,4 +33,6 @@ val loc_of_ast_list : ast list -> Loc.loc
 val is_expr : ast -> bool
 
 val compare_names : string -> string -> int
+
+val class_split_suite : ast list -> (ast list) * (ast list)
 

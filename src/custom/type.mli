@@ -8,7 +8,7 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of (string option) * ty   (* for recursive types, namely classes *)
+  | TyFold of (string option) * (ty Lazy.t) (* for recursive types, namely classes *)
   | TyUnfold of ty
 
 and tyvar =
@@ -22,12 +22,20 @@ and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 val string_of_type : ty -> string
 
 val gen_var_ty : ty
+val gen_var_ty2 : ty
 val none_ty : ty
 val bool_ty : ty
+val prim_int_ty : ty
 val int_ty : ty
 val list_gen_ty : ty
 val list_ty : ty -> ty
+val prim_fun_ty : ty list -> ty -> ty
 val fun_ty : ty list -> ty -> ty
+val callable_ty : ?level:level -> ty list -> ty -> ty
+val has_field_ty : ?level:level -> string -> ty -> ty
+val bare_record_ty : (string * ty) list -> ty
+val folded_record_ty : (string option) -> (string * ty) list -> ty
+
 
 val typecheck : ?level:level ->
   ty Env.env -> bool Env.env ->  (* the type env, and the mut env *)
