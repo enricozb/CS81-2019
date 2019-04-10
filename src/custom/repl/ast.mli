@@ -5,6 +5,7 @@ module NameMap : Map.S with type key = name
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
+  | String of Loc.loc * string
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name

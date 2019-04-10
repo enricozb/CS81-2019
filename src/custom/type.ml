@@ -178,19 +178,23 @@ let rec occurs loc tyvar_id tyvar_level ty =
     | TyUnfold _ ->
         failwith "Type.occurs on TyUnfold"
 
-
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =
   incr fresh_counter;
   TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level)}
 
-(* common types *)
+and fresh_gen_tyvar _ =
+  incr fresh_counter;
+  TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
+
+(* ----------------------------- COMMON TYPES ----------------------------- *)
+let prim_int_ty = TyCon ("int", [])
+let prim_string_ty = TyCon ("string", [])
+
 let gen_var_ty = TyVar {contents = Generic "a"}
 let gen_var_ty2 = TyVar {contents = Generic "b"}
 let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
-let prim_int_ty = TyCon ("int", [])
-let int_ty = TyCon ("int", [])
 let list_gen_ty = TyCon ("List", [gen_var_ty])
 let list_ty elem_ty = TyCon ("List", [elem_ty])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
@@ -203,12 +207,15 @@ let fun_ty param_tys ret_ty =
     )
   )))
 
-let callable_ty ?(level=0) param_tys ret_ty =
+let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
   TyFold (None, lazy (TyRecord (
     TyRowExtend (
       Ast.NameMap.singleton "__call__" prim_fun_ty,
-      fresh_tyvar level ()
+      if generic then
+        fresh_gen_tyvar ()
+      else
+        fresh_tyvar level ()
     )
   )))
 
@@ -236,11 +243,14 @@ let folded_record_ty name name_ty_list =
     )
   )))
 
-let has_field_ty ?(level=0) field ty =
+let has_field_ty ?(level=0) ?(generic=false) field ty =
   TyFold (None, lazy (TyRecord (
     TyRowExtend (
       Ast.NameMap.singleton field ty,
-      fresh_tyvar level ()
+      if generic then
+        fresh_gen_tyvar ()
+      else
+        fresh_tyvar level ()
     )
   )))
 
@@ -297,8 +307,16 @@ let rec unify loc ty1 ty2 =
         unify (Lazy.force ty1) ty2
 
     (* TODO: should this check the names? *)
+    | TyFold (Some name1, rec_ty1), TyFold (Some name2, rec_ty2) ->
+          if name1 <> name2 then
+            Error.unify_error loc
+              (string_of_type ty1)
+              (string_of_type ty2)
+          else
+            unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
+
     | TyFold (_, ty1), TyFold (_, ty2) ->
-          unify (Lazy.force ty1) (Lazy.force ty2)
+        unify (Lazy.force ty1) (Lazy.force ty2)
 
     | TyFold (Some name1, _), TyCon (name2, params)
     | TyCon (name1, params), TyFold (Some name2, _)
@@ -410,7 +428,7 @@ let rec generalize level ty =
       failwith "Type.generalize on TyUnfold"
 
 let rec instantiate level ty =
-	let generic_to_unbound = Hashtbl.create 10 in
+	let generic_to_unbound = Hashtbl.create 100 in
   let rec recurse = function
 		| TyVar {contents = Link ty} -> recurse ty
 		| TyVar {contents = Generic gen_id} ->
@@ -475,6 +493,7 @@ let is_expansive = function
    * doesn't contain any mutable values *)
   | Ast.Name _
   | Ast.Num _
+  | Ast.String _
   | Ast.List _
   | Ast.Lambda _
   | Ast.Field _  (* TODO: change if getters & setters are added *)
@@ -508,7 +527,9 @@ let rec typecheck ?level:(level=1) ty_env mut_env ast =
 and infer level ty_env mut_env ast = match ast with
   | Ast.Name (l, id) -> instantiate level (Env.lookup l id ty_env)
 
-  | Ast.Num (l, i) -> int_ty
+  | Ast.Num (l, i) -> prim_int_ty
+
+  | Ast.String (l, s) -> prim_string_ty
 
   | Ast.List (l, asts) ->
       let elem_ty = fresh_tyvar level () in

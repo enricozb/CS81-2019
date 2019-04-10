@@ -2,6 +2,7 @@ type value =
   | None
   | Bool of bool
   | Int of Z.t
+  | String of string
   | List of value list
   | Object of name_value_map
   | Lambda of lambda * closure
@@ -21,6 +22,7 @@ let rec string_of_value = function
   | None -> "none"
   | Bool b -> string_of_bool b
   | Int i -> Z.to_string i
+  | String s -> "\"" ^ s ^ "\""
   | List values -> "[" ^ string_of_list values ^ "]"
   | Object field_value_map ->
       let obj_str =

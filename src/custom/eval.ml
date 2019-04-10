@@ -28,6 +28,7 @@ and reduce_ast val_env frames = function
       end
 
   | Ast.Num (l, i) -> (Value (Value.Int (Z.of_string i)), val_env, frames)
+  | Ast.String (l, s) -> (Value (Value.String s), val_env, frames)
 
   | Ast.List (l, []) -> (Value (Value.List []), val_env, frames)
   | Ast.List (l, ast :: asts) ->

@@ -20,6 +20,7 @@ module NameMap = Map.Make(
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
+  | String of Loc.loc * string
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name
@@ -60,6 +61,8 @@ and string_of_ast = function
   | Name (_, s) -> s
 
   | Num (_, i) -> i
+
+  | String (_, s) -> "\"" ^ s ^ "\""
 
   | List (_, asts) ->
       "[" ^ string_of_ast_list asts ", " ^ "]"
@@ -131,6 +134,7 @@ let print_ast ast = Printf.printf "%s\n" (string_of_ast ast)
 let loc_of_ast = function
   | Name (l, _)
   | Num (l, _)
+  | String (l, _)
   | List (l, _)
   | Record (l, _)
   | Field (l, _, _)
@@ -162,7 +166,7 @@ let loc_of_ast_list = function
       in loc_of_ast_ (loc_of_ast ast) rest
 
 let is_expr = function
-  | Name _ | Num _ | List _ | Record _ | Call _ | Lambda _ | Field _ -> true
+  | Name _ | Num _ | String _ | List _ | Record _ | Call _ | Lambda _ | Field _ -> true
   | If _
   | While _
   | Break _

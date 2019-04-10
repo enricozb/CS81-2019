@@ -2,6 +2,7 @@ type value =
   | None
   | Bool of bool
   | Int of Z.t
+  | String of string
   | List of value list
   | Object of name_value_map
   | Lambda of lambda * closure

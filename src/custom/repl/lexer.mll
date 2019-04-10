@@ -17,6 +17,7 @@
   let string_of_token = function
     | NAME (_, s) -> s
     | NUMBER (_, i) -> i
+    | STRING (_, s) -> s
     | CHECKEXPECT _ -> "check_expect"
     | CHECKERROR _ -> "check_error"
     | CHECKTYPE _ -> "check_type"
@@ -34,7 +35,6 @@
     | CLASS _ -> "class"
     | DOT _ -> "."
     | COLON _ -> ":"
-    | QUOTE _ -> "'"
     | COMMA _ -> ","
     | EQUALS _ -> "="
     | MAPSTO _ -> "->"
@@ -155,9 +155,14 @@ rule token filename = parse
   | ':' { COLON (make_loc filename lexbuf) }
   | '.' { DOT (make_loc filename lexbuf) }
   | ',' { COMMA (make_loc filename lexbuf) }
-  | ''' { QUOTE (make_loc filename lexbuf) }
   | ['a'-'z' 'A'-'Z' '_']+ ['a'-'z' 'A'-'Z' '0'-'9' '_']* as id {
     name (make_loc filename lexbuf) id
+  }
+  | ['"'] {
+    let buffer = Buffer.create 5 in
+    let start_loc = make_loc filename lexbuf in
+    let end_loc, s = make_string filename buffer lexbuf in
+    STRING (Loc.span start_loc end_loc, s)
   }
   | ['-']?['0'-'9']+ as num {
     NUMBER ((make_loc filename lexbuf), num)
@@ -204,6 +209,26 @@ rule token filename = parse
   }
   | _ { raise (SyntaxError (make_loc filename lexbuf)) }
   | eof { EOF }
+
+and make_string filename buffer = parse
+  | '"' { (make_loc filename lexbuf), Buffer.contents buffer }
+  | "\\t" {
+    Buffer.add_char buffer '\t';
+    make_string filename buffer lexbuf
+  }
+  | "\\n" {
+    Buffer.add_char buffer '\n';
+    make_string filename buffer lexbuf
+  }
+  | "\\\"" {
+    Buffer.add_char buffer '"';
+    make_string filename buffer lexbuf
+  }
+  | eof { raise End_of_file }
+  | _ as c {
+    Buffer.add_char buffer c;
+    make_string filename buffer lexbuf
+  }
 
 and newline filename = parse
   (* to allow empty and incomplete blocks in REPL *)

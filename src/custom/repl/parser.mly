@@ -21,7 +21,7 @@
     | EQUALS l
     | MAPSTO l
     | COMMA l
-    | QUOTE l
+    | STRING (l, _)
     | LANGLE l | RANGLE l
     | LBRACE l | RBRACE l
     | LPAREN l | RPAREN l
@@ -105,6 +105,7 @@
 
 %token <Loc.loc * string> NAME
 %token <Loc.loc * string> NUMBER
+%token <Loc.loc * string> STRING
 %token <Loc.loc> CHECKEXPECT CHECKERROR CHECKTYPE CHECKTYPEERROR
 %token <Loc.loc> IMPORT
 %token <Loc.loc> LET MUT
@@ -115,7 +116,7 @@
 %token <Loc.loc> CLASS
 %token <Loc.loc> COLON DOT
 %token <Loc.loc> EQUALS MAPSTO
-%token <Loc.loc> COMMA QUOTE
+%token <Loc.loc> COMMA
 %token <Loc.loc> LANGLE RANGLE
 %token <Loc.loc> LBRACE RBRACE
 %token <Loc.loc> LPAREN RPAREN
@@ -299,6 +300,10 @@ literal:
   | NUMBER {
     let loc = fst $1 in
     Ast.Call (loc, Ast.Name (loc, "Int"), [Ast.Num (fst $1, snd $1)])
+  }
+  | STRING {
+    let loc = fst $1 in
+    Ast.Call (loc, Ast.Name (loc, "String"), [Ast.String (fst $1, snd $1)])
   }
   | LBRACK expr_list_inner RBRACK       { Ast.List (Loc.span $1 $3, $2) }
   | LBRACE named_expr_list_inner RBRACE {
