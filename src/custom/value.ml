@@ -49,5 +49,41 @@ let truthy l = function
                           ~expected: "Bool"
                           ~provided: (string_of_value value)
 
+
+(* -------------------------- Constructing Values -------------------------- *)
+let prim_zero_arity_fun f = Builtin (fun vals loc ->
+  match vals with
+  | [] -> f ()
+  | _ ->
+      Error.call_len_error loc
+        ~fun_ty: "builitn"
+        ~expected: 0
+        ~provided: (List.length vals)
+  )
+
+(*let callable_object prim_func =*)
+  (*let rec callable = Object*)
+    (*(BatHashtbl.of_list [*)
+      (*("__call__", callable);*)
+      (*("~~call~~", prim_func)*)
+    (*])*)
+
+(*let base_object () = Object*)
+  (*(BatHashtbl.of_list [*)
+    (*("__repr__", callable_object (prim_zero_arity_fun (fun () -> "<object>")))*)
+  (*])*)
+
 let build_object fields = Object (BatHashtbl.of_list fields)
+
+let get_object_field obj field =
+  match obj with
+  | Object fields ->
+      begin match BatHashtbl.find_option fields field with
+        | Some v -> v
+        | None ->
+            failwith ("Value.get_object_field can't find field '" ^ field ^ "'")
+      end
+  | _ ->
+      failwith "Value.get_object_field called on non object"
+
 

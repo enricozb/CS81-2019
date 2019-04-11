@@ -90,6 +90,16 @@ let parse_file (filename : string) =
       let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
       raise (ParsingError loc)
 
+let parse_string (filename : string) str =
+  Lexer.reset_state FILE;
+  let lexbuf = Lexing.from_string str in
+    try
+      Parser.file_input (Lexer.token_cache filename) lexbuf
+      (*Parser.file_input (print_wrap @@ Lexer.token_cache filename) lexbuf*)
+    with _ ->
+      let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
+      raise (ParsingError loc)
+
 (* takes in a function that takes in the (`Ast || `ParsingError) read in and
  * any auxilliary data. Feeds in `aux` into f repeatedly after each parsing. *)
 let repl f (aux : 'a) =

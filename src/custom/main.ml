@@ -15,13 +15,9 @@ let run_ty_val (ty_env, mut_env, val_env) ast =
 
 
 (* handles non-checks and non-imports, does not return type nor value *)
-let run_ast envs ?(quiet=false) ast =
+let run_ast envs ast =
   incr curr_level;
-  let (ty_env, mut_env, val_env, ty, value) = run_ty_val envs ast in
-  if not quiet then
-    Printf.printf "%s : %s\n"
-      (Value.string_of_value value) (Type.string_of_type ty);
-  (ty_env, mut_env, val_env)
+  run_ty_val envs ast
 
 
 let run_check (ty_env, mut_env, val_env) ast =
@@ -83,15 +79,46 @@ let rec run ?(quiet=false) (ty_env, mut_env, val_env) ast =
       print_tests_stats ();
     (ty_env, mut_env, val_env)
 
-  | Ast.Bind _ | Ast.Def _ | Ast.Assign _ ->
-      run_ast (ty_env, mut_env, val_env) ~quiet:quiet ast
-
   | _ ->
-      if Ast.is_expr ast then
-        run_ast (ty_env, mut_env, val_env) ~quiet:quiet
-          (Ast.Bind (Ast.loc_of_ast ast, false, "_", ast))
+      if Ast.is_expr ast && not quiet then
+        let loc = Ast.loc_of_ast ast in
+
+        (* run and save expression in variable "_" *)
+        let (ty_env, mut_env, val_env, ty, v) =
+          run_ast (ty_env, mut_env, val_env) (Ast.Bind (loc, false, "_", ast))
+        in
+
+        (* if the value is an object get repr of `_` and print it
+         * otherwise dispatch the printing to Value.string_of_value *)
+        let (ty_env, mut_env, val_env, repr) =
+          match v with
+          | Value.Object _ ->
+            let (ty_env, mut_env, val_env, _, repr) =
+              run_ast
+                (ty_env, mut_env, val_env)
+                (Ast.Call (loc, Ast.Name (loc, "repr"), [Ast.Name (loc, "_")]))
+            in
+            (* grab raw string out of `repr` *)
+            begin match Value.get_object_field repr "val" with
+              | Value.String s -> (ty_env, mut_env, val_env, s)
+              | _ -> failwith "Main.run: string values is malformed"
+            end
+          | _ -> (ty_env, mut_env, val_env, Value.string_of_value v)
+        in
+        Printf.printf "%s : %s\n" repr (Type.string_of_type ty);
+        (ty_env, mut_env, val_env)
       else
-        run_ast (ty_env, mut_env, val_env) ~quiet:quiet ast
+        let (ty_env, mut_env, val_env, _, _) =
+          run_ast (ty_env, mut_env, val_env) ast
+        in
+        (ty_env, mut_env, val_env)
+
+
+let run_basis () =
+    let asts = Repl.parse_string "<basis>" Basis.basis in
+    let envs = List.fold_left (run ~quiet:true) Basis.envs asts in
+    print_tests_stats ();
+    envs
 
 
 let rec repl_func ast_or_error (ty_env, mut_env, val_env) =
@@ -108,9 +135,9 @@ let rec repl_func ast_or_error (ty_env, mut_env, val_env) =
 
 
 let () =
-  let (ty_env, mut_env, val_env) = (Basis.ty_env, Basis.mut_env, Basis.val_env) in
+  let envs = run_basis () in
   try
-    Repl.repl repl_func (ty_env, mut_env, val_env)
+    Repl.repl repl_func envs
   with
     | End_of_file -> exit 0
 

@@ -8,7 +8,7 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of (string option) * (ty Lazy.t) (* for recursive types, namely classes *)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
   | TyUnfold of ty
 
 and tyvar =
@@ -35,7 +35,7 @@ val fun_ty : ty list -> ty -> ty
 val callable_ty : ?level:level -> ?generic:bool -> ty list -> ty -> ty
 val has_field_ty : ?level:level -> ?generic:bool -> string -> ty -> ty
 val bare_record_ty : (string * ty) list -> ty
-val folded_record_ty : (string option) -> (string * ty) list -> ty
+val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty
 
 
 val typecheck : ?level:level ->

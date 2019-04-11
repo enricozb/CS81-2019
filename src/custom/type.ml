@@ -9,7 +9,7 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of (string option) * (ty Lazy.t) (* for recursive types, namely classes *)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
   | TyUnfold of ty
 
 and tyvar =
@@ -129,7 +129,10 @@ let rec string_of_type ty =
 				in
 				name_ty_map_str ^ rest_ty_str
 
-    | TyFold (Some name, _) -> name
+    | TyFold (Some (id, []), _) ->
+        id
+    | TyFold (Some (id, param_tys), _) ->
+        id ^ "[" ^ (recurse_tys param_tys) ^ "]"
     | TyFold (None, ty) -> recurse (Lazy.force ty)
 
     | TyUnfold (TyFold (_, ty)) -> recurse (Lazy.force ty)
@@ -171,7 +174,7 @@ let rec occurs loc tyvar_id tyvar_level ty =
 				recurse rest_ty
 
     (* TODO: this has to change for generic classes *)
-    | TyFold (Some name, ty) -> ()
+    | TyFold (Some (id, param_tys), ty) -> ()
     | TyFold (None, ty) ->
         recurse (Lazy.force ty)
 
@@ -231,8 +234,8 @@ let bare_record_ty name_ty_list =
     )
   )
 
-let folded_record_ty name name_ty_list =
-  TyFold (name, lazy (TyRecord (
+let folded_record_ty tycon name_ty_list =
+  TyFold (tycon, lazy (TyRecord (
     TyRowExtend (
       List.fold_left
         (fun name_ty_map (name, ty) ->
@@ -307,21 +310,22 @@ let rec unify loc ty1 ty2 =
         unify (Lazy.force ty1) ty2
 
     (* TODO: should this check the names? *)
-    | TyFold (Some name1, rec_ty1), TyFold (Some name2, rec_ty2) ->
-          if name1 <> name2 then
-            Error.unify_error loc
-              (string_of_type ty1)
-              (string_of_type ty2)
-          else
-            unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
+    | TyFold (Some (id1, param_tys1), _),
+      TyFold (Some (id2, param_tys2), _) ->
+          unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
+          (*if id1 <> id2 then*)
+            (*Error.unify_error loc*)
+              (*(string_of_type ty1)*)
+              (*(string_of_type ty2)*)
+          (*else*)
+            (*unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)*)
 
     | TyFold (_, ty1), TyFold (_, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)
 
-    | TyFold (Some name1, _), TyCon (name2, params)
-    | TyCon (name1, params), TyFold (Some name2, _)
-      when name1 = name2 && List.length params = 0 ->
-          ()
+    | TyFold (Some (name1, params1), _), TyCon (name2, params2)
+    | TyCon (name1, params1), TyFold (Some (name2, params2), _) ->
+        unify (TyCon (name1, params1)) (TyCon (name2, params2))
 
     | (ty1, ty2) ->
         Error.unify_error loc (string_of_type ty1) (string_of_type ty2)

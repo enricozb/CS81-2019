@@ -23,4 +23,5 @@ val string_of_value : value -> string
 val truthy : Loc.loc -> value -> bool
 
 val build_object : (string * value) list -> value
+val get_object_field : value -> string -> value
 

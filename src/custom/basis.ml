@@ -6,17 +6,6 @@ let fake_loc = Loc.({filename = "none";
 
 let build_callable f = Value.Object (BatHashtbl.of_list [("__call__", f)])
 
-let get_obj_field obj field =
-  match obj with
-  | Value.Object fields ->
-      begin match BatHashtbl.find_option fields field with
-        | Some v -> v
-        | None ->
-            failwith ("Basis.get_obj_field can't find field '" ^ field ^ "'")
-      end
-  | _ ->
-      failwith "Basis.get_obj_field called on non object"
-
 let call_prim_func f values =
   match f with
   | Value.Builtin primop -> primop values fake_loc
@@ -81,7 +70,11 @@ let operator_func field =
   )
   Type.gen_var_ty
   (fun obj b ->
-      let f = get_obj_field (get_obj_field obj field) "__call__" in
+      let f =
+        Value.get_object_field
+          (Value.get_object_field obj field)
+          "__call__"
+      in
       call_prim_func f [b])
 
 let operator field = (operator_ty field, operator_func field)
@@ -102,7 +95,7 @@ let eq_ty, eq = operator "__eq__"
  * returns a callable that has it's first argument bound.
  *)
 let bind_self callable obj =
-  let func = get_obj_field callable "__call__" in
+  let func = Value.get_object_field callable "__call__" in
   let newfunc = match func with
     | Value.Builtin primop ->
         Value.Builtin (fun vals loc ->
@@ -126,9 +119,9 @@ let rec int_ty =
      ("__repr__", Type.fun_ty [] string_ty);
 
     ])
-  and int_ty = TyFold (Some "Int", inner_record)
+  and int_ty = Type.TyFold (Some ("Int", []), inner_record)
   in
-  Type.TyFold (Some "Int", inner_record)
+  int_ty
 
 and string_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
@@ -137,9 +130,9 @@ and string_ty =
      ("__add__", Type.fun_ty [string_ty] (string_ty));
      ("__repr__", Type.fun_ty [] string_ty);
     ])
-  and string_ty = TyFold (Some "String", inner_record)
+  and string_ty = Type.TyFold (Some ("String", []), inner_record)
   in
-  Type.TyFold (Some "String", inner_record)
+  string_ty
 
 let make_int = ref (fun x -> failwith "Basis.make_int called before ready")
 let make_string = ref (fun s -> failwith "Basis.make_string called before ready")
@@ -163,13 +156,13 @@ let int_class_ty =
 let int_class =
   let rec int_uninitialized_object () =
     let obj = BatHashtbl.of_list [("val", Value.Int Z.zero)] in
-    BatHashtbl.add obj "__add__" (bind_self (int_add ()) (Value.Object obj));
-    BatHashtbl.add obj "__sub__" (bind_self (int_sub ()) (Value.Object obj));
-    BatHashtbl.add obj "__mul__" (bind_self (int_mul ()) (Value.Object obj));
-    BatHashtbl.add obj "__div__" (bind_self (int_div ()) (Value.Object obj));
-    BatHashtbl.add obj "__pow__" (bind_self (int_pow ()) (Value.Object obj));
-    BatHashtbl.add obj "__eq__"  (bind_self (int_eq ()) (Value.Object obj));
-    BatHashtbl.add obj "__repr__" (bind_self (int_repr ()) (Value.Object obj));
+    BatHashtbl.replace obj "__add__" (bind_self (int_add ()) (Value.Object obj));
+    BatHashtbl.replace obj "__sub__" (bind_self (int_sub ()) (Value.Object obj));
+    BatHashtbl.replace obj "__mul__" (bind_self (int_mul ()) (Value.Object obj));
+    BatHashtbl.replace obj "__div__" (bind_self (int_div ()) (Value.Object obj));
+    BatHashtbl.replace obj "__pow__" (bind_self (int_pow ()) (Value.Object obj));
+    BatHashtbl.replace obj "__eq__"  (bind_self (int_eq ()) (Value.Object obj));
+    BatHashtbl.replace obj "__repr__" (bind_self (int_repr ()) (Value.Object obj));
     obj
   and int_call () =
     prim_unary_fun
@@ -259,8 +252,8 @@ let string_class_ty =
 let string_class =
   let rec string_uninitialized_object () =
     let obj = BatHashtbl.of_list [("val", Value.String "")] in
-    BatHashtbl.add obj "__add__" (bind_self (string_add ()) (Value.Object obj));
-    BatHashtbl.add obj "__repr__" (bind_self (string_repr ()) (Value.Object obj));
+    BatHashtbl.replace obj "__add__" (bind_self (string_add ()) (Value.Object obj));
+    BatHashtbl.replace obj "__repr__" (bind_self (string_repr ()) (Value.Object obj));
     obj
   and string_call () =
     prim_unary_fun
@@ -339,7 +332,7 @@ let __print_string__ =
   unary_fun
     string_ty
     (fun string_obj ->
-      let raw_str = get_obj_field string_obj "val" in
+      let raw_str = Value.get_object_field string_obj "val" in
       match raw_str with
       | Value.String s ->
           Printf.printf "%s\n" s;
@@ -434,3 +427,12 @@ let ty_env = Env.bind_pairs
    ("String", string_class_ty);
   ] Env.empty
 
+let envs = (ty_env, mut_env, val_env)
+
+let basis = "
+def repr(x):
+  return x.__repr__()
+
+def print(x):
+  __print_string__(repr(x))
+"
