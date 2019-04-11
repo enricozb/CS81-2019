@@ -86,6 +86,10 @@ let div_ty, div = operator "__div__"
 let pow_ty, pow = operator "__pow__"
 
 let eq_ty, eq = operator "__eq__"
+let le_ty, le = operator "__le__"
+let lt_ty, lt = operator "__lt__"
+let ge_ty, ge = operator "__ge__"
+let gt_ty, gt = operator "__gt__"
 
 
 (* -------------------------------- CLASSES -------------------------------- *)
@@ -110,12 +114,18 @@ let rec int_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_int_ty);
-     ("__add__", Type.fun_ty [int_ty] (int_ty));
-     ("__sub__", Type.fun_ty [int_ty] (int_ty));
-     ("__mul__", Type.fun_ty [int_ty] (int_ty));
-     ("__div__", Type.fun_ty [int_ty] (int_ty));
-     ("__pow__", Type.fun_ty [int_ty] (int_ty));
-     ("__eq__",  Type.fun_ty [int_ty] Type.bool_ty);
+     ("__add__", Type.fun_ty [int_ty] int_ty);
+     ("__sub__", Type.fun_ty [int_ty] int_ty);
+     ("__mul__", Type.fun_ty [int_ty] int_ty);
+     ("__div__", Type.fun_ty [int_ty] int_ty);
+     ("__pow__", Type.fun_ty [int_ty] int_ty);
+
+     ("__eq__", Type.fun_ty [int_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [int_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [int_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [int_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [int_ty] Type.bool_ty);
+
      ("__repr__", Type.fun_ty [] string_ty);
 
     ])
@@ -128,6 +138,13 @@ and string_ty =
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_string_ty);
      ("__add__", Type.fun_ty [string_ty] (string_ty));
+
+     ("__eq__", Type.fun_ty [string_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [string_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [string_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [string_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [string_ty] Type.bool_ty);
+
      ("__len__", Type.fun_ty [] int_ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
@@ -140,7 +157,9 @@ and list_ty =
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_list_gen_ty);
      ("__add__", Type.fun_ty [list_ty] list_ty);
+
      ("__len__", Type.fun_ty [] int_ty);
+
      ("__repr__", Type.fun_ty [] string_ty);
     ])
   and list_ty = Type.TyFold (Some ("List", [Type.gen_var_ty]), inner_record)
@@ -162,7 +181,12 @@ let int_class_ty =
      ("__mul__", Type.fun_ty [int_ty; int_ty] int_ty);
      ("__div__", Type.fun_ty [int_ty; int_ty] int_ty);
      ("__pow__", Type.fun_ty [int_ty; int_ty] int_ty);
+
      ("__eq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
 
      ("__repr__", Type.fun_ty [int_ty] string_ty);
     ]
@@ -175,7 +199,13 @@ let int_class =
     BatHashtbl.replace obj "__mul__" (bind_self (int_mul ()) (Value.Object obj));
     BatHashtbl.replace obj "__div__" (bind_self (int_div ()) (Value.Object obj));
     BatHashtbl.replace obj "__pow__" (bind_self (int_pow ()) (Value.Object obj));
+
     BatHashtbl.replace obj "__eq__"  (bind_self (int_eq ()) (Value.Object obj));
+    BatHashtbl.replace obj "__le__"  (bind_self (int_le ()) (Value.Object obj));
+    BatHashtbl.replace obj "__lt__"  (bind_self (int_lt ()) (Value.Object obj));
+    BatHashtbl.replace obj "__ge__"  (bind_self (int_ge ()) (Value.Object obj));
+    BatHashtbl.replace obj "__gt__"  (bind_self (int_gt ()) (Value.Object obj));
+
     BatHashtbl.replace obj "__repr__" (bind_self (int_repr ()) (Value.Object obj));
     obj
   and int_call () =
@@ -236,7 +266,13 @@ let int_class =
   and int_mul () = int_op Z.( * ) ()
   and int_div () = int_op Z.( / ) ()
   and int_pow () = int_op (fun a b -> Z.(a ** to_int b)) ()
+
   and int_eq () = int_comp Z.equal ()
+  and int_le () = int_comp Z.leq ()
+  and int_lt () = int_comp Z.lt ()
+  and int_ge () = int_comp Z.geq ()
+  and int_gt () = int_comp Z.gt ()
+
   and int_repr () = int_unary (fun x -> !make_string (Z.to_string x)) ()
   in
   make_int := (fun x ->
@@ -251,7 +287,13 @@ let int_class =
      ("__mul__", int_mul ());
      ("__div__", int_div ());
      ("__pow__", int_pow ());
+
      ("__eq__", int_eq ());
+     ("__le__", int_le ());
+     ("__lt__", int_lt ());
+     ("__ge__", int_ge ());
+     ("__gt__", int_gt ());
+
      ("__repr__", int_repr ());
     ]
 
@@ -260,6 +302,13 @@ let string_class_ty =
   Type.folded_record_ty None
     [("__call__", Type.prim_fun_ty [Type.prim_string_ty] string_ty);
      ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
+
+     ("__eq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+
      ("__len__", Type.fun_ty [string_ty] int_ty);
      ("__repr__", Type.fun_ty [string_ty] string_ty);
     ]
@@ -269,6 +318,11 @@ let string_class =
     let obj = BatHashtbl.of_list [("val", Value.String "")] in
     BatHashtbl.replace obj "__add__" (bind_self (string_add ()) (Value.Object obj));
     BatHashtbl.replace obj "__len__" (bind_self (string_len ()) (Value.Object obj));
+    BatHashtbl.replace obj "__eq__" (bind_self (string_eq ()) (Value.Object obj));
+    BatHashtbl.replace obj "__le__" (bind_self (string_le ()) (Value.Object obj));
+    BatHashtbl.replace obj "__lt__" (bind_self (string_lt ()) (Value.Object obj));
+    BatHashtbl.replace obj "__ge__" (bind_self (string_ge ()) (Value.Object obj));
+    BatHashtbl.replace obj "__gt__" (bind_self (string_gt ()) (Value.Object obj));
     BatHashtbl.replace obj "__repr__" (bind_self (string_repr ()) (Value.Object obj));
     obj
   and string_call () =
@@ -324,6 +378,13 @@ let string_class =
         | _ -> failwith "Runtime type error"
       )
   and string_add () = string_op ( ^ ) ()
+
+  and string_eq () = string_comp (=) ()
+  and string_le () = string_comp (<=) ()
+  and string_lt () = string_comp (<) ()
+  and string_ge () = string_comp (>=) ()
+  and string_gt () = string_comp (>) ()
+
   and string_len () =
     string_unary
       (fun s -> !make_int (Z.of_int (String.length s))) ()
@@ -342,7 +403,15 @@ let string_class =
   Value.build_object
     [("__call__", string_call ());
      ("__add__", string_add ());
+
+     ("__eq__", string_eq ());
+     ("__le__", string_le ());
+     ("__lt__", string_lt ());
+     ("__ge__", string_ge ());
+     ("__gt__", string_gt ());
+
      ("__len__", string_len ());
+
      ("__repr__", string_repr ());
     ]
 
@@ -471,10 +540,10 @@ let val_env = Env.bind_pairs
    ("^", pow);
 
    ("==", eq);
-   (*("<=", num_num_to_bool Z.leq);*)
-   (*(">=", num_num_to_bool Z.geq);*)
-   (*("<", num_num_to_bool Z.lt);*)
-   (*(">", num_num_to_bool Z.gt);*)
+   ("<=", le);
+   ("<",  lt);
+   (">=", ge);
+   (">",  gt);
    (*("!=", num_num_to_bool (fun a b -> not (Z.equal a b)));*)
 
    ("false", Value.Bool false);
@@ -504,10 +573,10 @@ let ty_env = Env.bind_pairs
    ("^", pow_ty);
 
    ("==", eq_ty);
-   (*("<=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
-   (*(">=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
-   (*("<", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
-   (*(">", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
+   ("<=", le_ty);
+   ("<",  lt_ty);
+   (">=", ge_ty);
+   (">",  gt_ty);
    (*("!=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
 
    ("false", Type.bool_ty);
