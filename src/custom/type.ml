@@ -191,15 +191,16 @@ and fresh_gen_tyvar _ =
   TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
-let prim_int_ty = TyCon ("int", [])
-let prim_string_ty = TyCon ("string", [])
-
 let gen_var_ty = TyVar {contents = Generic "a"}
 let gen_var_ty2 = TyVar {contents = Generic "b"}
+
+let prim_int_ty = TyCon ("int", [])
+let prim_string_ty = TyCon ("string", [])
+let prim_list_gen_ty = TyCon ("list", [gen_var_ty])
+let prim_list_ty ty = TyCon ("list", [ty])
+
 let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
-let list_gen_ty = TyCon ("List", [gen_var_ty])
-let list_ty elem_ty = TyCon ("List", [elem_ty])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 let fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
@@ -460,9 +461,10 @@ let rec instantiate level ty =
 
   | TyFold (None, ty) ->
       TyFold (None, lazy (recurse (Lazy.force ty)))
-  | TyFold (Some name, ty) ->
-      (* TODO: this has to change for generic classes *)
-      TyFold (Some name, ty)
+  | TyFold (Some (id, param_tys), ty) ->
+      TyFold (Some (id, List.map recurse param_tys),
+              lazy (recurse (Lazy.force ty)))
+
 
   | TyUnfold _ ->
       failwith "Type.instantiate on TyUnfold"
@@ -544,7 +546,7 @@ and infer level ty_env mut_env ast = match ast with
       if tys != [] then
         unify l elem_ty (List.hd tys);
 
-      list_ty elem_ty
+      prim_list_ty elem_ty
 
   | Ast.Record (l, name_ast_map) ->
       let name_ty_map =

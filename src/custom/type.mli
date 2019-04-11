@@ -23,13 +23,13 @@ val string_of_type : ty -> string
 
 val prim_int_ty : ty
 val prim_string_ty : ty
+val prim_list_gen_ty : ty
+val prim_list_ty : ty -> ty
 
 val gen_var_ty : ty
 val gen_var_ty2 : ty
 val none_ty : ty
 val bool_ty : ty
-val list_gen_ty : ty
-val list_ty : ty -> ty
 val prim_fun_ty : ty list -> ty -> ty
 val fun_ty : ty list -> ty -> ty
 val callable_ty : ?level:level -> ?generic:bool -> ty list -> ty -> ty

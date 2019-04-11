@@ -305,7 +305,10 @@ literal:
     let loc = fst $1 in
     Ast.Call (loc, Ast.Name (loc, "String"), [Ast.String (fst $1, snd $1)])
   }
-  | LBRACK expr_list_inner RBRACK       { Ast.List (Loc.span $1 $3, $2) }
+  | LBRACK expr_list_inner RBRACK {
+    let loc = Loc.span $1 $3 in
+    Ast.Call (loc, Ast.Name (loc, "List"), [Ast.List (loc, $2)])
+  }
   | LBRACE named_expr_list_inner RBRACE {
     let name_ast_map =
       List.fold_right

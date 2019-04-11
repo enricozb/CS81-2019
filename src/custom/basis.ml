@@ -128,14 +128,28 @@ and string_ty =
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_string_ty);
      ("__add__", Type.fun_ty [string_ty] (string_ty));
+     ("__len__", Type.fun_ty [] int_ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
   and string_ty = Type.TyFold (Some ("String", []), inner_record)
   in
   string_ty
 
-let make_int = ref (fun x -> failwith "Basis.make_int called before ready")
-let make_string = ref (fun s -> failwith "Basis.make_string called before ready")
+and list_ty =
+  (* needs to be lazy to appease OCaml's restriction on let rec values *)
+  let rec inner_record = lazy (Type.bare_record_ty
+    [("val", Type.prim_list_gen_ty);
+     ("__add__", Type.fun_ty [list_ty] list_ty);
+     ("__len__", Type.fun_ty [] int_ty);
+     ("__repr__", Type.fun_ty [] string_ty);
+    ])
+  and list_ty = Type.TyFold (Some ("List", [Type.gen_var_ty]), inner_record)
+  in
+  list_ty
+
+let make_int = ref (fun _ -> failwith "Basis.make_int called before ready")
+let make_string = ref (fun _ -> failwith "Basis.make_string called before ready")
+let make_list = ref (fun _ -> failwith "Basis.make_string called before ready")
 
 
 (* ---------------------------------- Int ---------------------------------- *)
@@ -246,6 +260,7 @@ let string_class_ty =
   Type.folded_record_ty None
     [("__call__", Type.prim_fun_ty [Type.prim_string_ty] string_ty);
      ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
+     ("__len__", Type.fun_ty [string_ty] int_ty);
      ("__repr__", Type.fun_ty [string_ty] string_ty);
     ]
 
@@ -253,6 +268,7 @@ let string_class =
   let rec string_uninitialized_object () =
     let obj = BatHashtbl.of_list [("val", Value.String "")] in
     BatHashtbl.replace obj "__add__" (bind_self (string_add ()) (Value.Object obj));
+    BatHashtbl.replace obj "__len__" (bind_self (string_len ()) (Value.Object obj));
     BatHashtbl.replace obj "__repr__" (bind_self (string_repr ()) (Value.Object obj));
     obj
   and string_call () =
@@ -308,6 +324,9 @@ let string_class =
         | _ -> failwith "Runtime type error"
       )
   and string_add () = string_op ( ^ ) ()
+  and string_len () =
+    string_unary
+      (fun s -> !make_int (Z.of_int (String.length s))) ()
   and string_repr () = string_unary
     (fun x ->
       let x = BatString.replace_chars
@@ -323,10 +342,95 @@ let string_class =
   Value.build_object
     [("__call__", string_call ());
      ("__add__", string_add ());
+     ("__len__", string_len ());
      ("__repr__", string_repr ());
     ]
 
 
+(* -------------------------------- List[a] -------------------------------- *)
+let list_class_ty =
+  Type.folded_record_ty None
+    [("__call__", Type.prim_fun_ty [Type.prim_list_gen_ty] list_ty);
+     ("__add__", Type.fun_ty [list_ty; list_ty] list_ty);
+     ("__len__", Type.fun_ty [list_ty] int_ty);
+     ("__repr__", Type.fun_ty [list_ty] string_ty);
+    ]
+
+let list_class =
+  let rec list_uninitialized_object () =
+    let obj = BatHashtbl.of_list [("val", Value.List [])] in
+    BatHashtbl.replace obj "__add__" (bind_self (list_add ()) (Value.Object obj));
+    BatHashtbl.replace obj "__len__" (bind_self (list_len ()) (Value.Object obj));
+    BatHashtbl.replace obj "__repr__" (bind_self (list_repr ()) (Value.Object obj));
+    obj
+  and list_call () =
+    prim_unary_fun
+      Type.prim_list_gen_ty
+      (fun l -> match l with
+        | (Value.List _) ->
+            let obj = list_uninitialized_object () in
+            BatHashtbl.replace obj "val" l;
+            Value.Object obj
+        | _ -> failwith "Runtime type error"
+      )
+  and list_op f () =
+    binary_fun
+      list_ty list_ty
+      (fun a b -> match (a, b) with
+        | (Value.Object self, Value.Object other) ->
+            let self_v = BatHashtbl.find self "val" in
+            let other_v = BatHashtbl.find other "val" in
+            begin match self_v, other_v with
+              | (Value.List x, Value.List y) ->
+                let obj = list_uninitialized_object () in
+                BatHashtbl.replace obj "val" (Value.List (f x y));
+                Value.Object obj
+              | _ -> failwith "Runtime type error"
+            end
+        | _ -> failwith "Runtime type error"
+      )
+  and list_unary f () =
+    unary_fun
+      list_ty
+      (fun a -> match a with
+        | (Value.Object self) ->
+            let self_v = BatHashtbl.find self "val" in
+            begin match self_v with
+              | (Value.List x) -> f x
+              | _ -> failwith "Runtime type error"
+            end
+        | _ -> failwith "Runtime type error"
+      )
+  and list_comp f () =
+    binary_fun
+      list_ty list_ty
+      (fun a b -> match (a, b) with
+        | (Value.Object self, Value.Object other) ->
+            let self_v = BatHashtbl.find self "val" in
+            let other_v = BatHashtbl.find other "val" in
+            begin match self_v, other_v with
+              | (Value.List x, Value.List y) ->
+                Value.Bool (f x y)
+              | _ -> failwith "Runtime type error"
+            end
+        | _ -> failwith "Runtime type error"
+      )
+  and list_add () = list_op ( @ ) ()
+  and list_len () =
+    list_unary
+      (fun l -> !make_int (Z.of_int (List.length l))) ()
+  and list_repr () = list_unary
+    (fun x -> !make_string "[.. list repr not ready ..]") ()
+  in
+  make_list := (fun l ->
+    let obj = list_uninitialized_object () in
+    BatHashtbl.replace obj "val" (Value.List l);
+    Value.Object obj);
+  Value.build_object
+    [("__call__", list_call ());
+     ("__add__", list_add ());
+     ("__repr__", list_repr ());
+    ]
 (* --------------------------- Common Functions --------------------------- *)
 let __print_string__ =
   unary_fun
@@ -357,11 +461,6 @@ let callable =
 let val_env = Env.bind_pairs
   (List.map (fun (name, v) -> (name, Value.Const v))
   [
-   (*("len", len);*)
-   (*("head", head);*)
-   (*("tail", tail);*)
-   (*("cons", cons);*)
-
    (*("and", bool_bool_to_bool (&&));*)
    (*("or", bool_bool_to_bool (||));*)
 
@@ -388,17 +487,13 @@ let val_env = Env.bind_pairs
 
    ("Int", int_class);
    ("String", string_class);
+   ("List", list_class);
   ]) Env.empty
 
 let mut_env = Env.map (fun name -> false) val_env
 
 let ty_env = Env.bind_pairs
   [
-   (*("len", Type.fun_ty [Type.list_gen_ty] Type.int_ty);*)
-   (*("head", Type.fun_ty [Type.list_gen_ty] Type.gen_var_ty);*)
-   (*("tail", Type.fun_ty [Type.list_gen_ty] Type.list_gen_ty);*)
-   (*("cons", Type.fun_ty [Type.gen_var_ty; Type.list_gen_ty] Type.list_gen_ty);*)
-
    (*("and", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
    (*("or", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
 
@@ -425,6 +520,7 @@ let ty_env = Env.bind_pairs
 
    ("Int", int_class_ty);
    ("String", string_class_ty);
+   ("List", list_class_ty);
   ] Env.empty
 
 let envs = (ty_env, mut_env, val_env)
@@ -432,6 +528,9 @@ let envs = (ty_env, mut_env, val_env)
 let basis = "
 def repr(x):
   return x.__repr__()
+
+def len(x):
+  return x.__len__()
 
 def print(x):
   __print_string__(repr(x))
