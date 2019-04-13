@@ -4,8 +4,6 @@ let fake_loc = Loc.({filename = "none";
                  end_line   = -1;
                  end_char   = -1 })
 
-let build_callable f = Value.Object (BatHashtbl.of_list [("__call__", f)])
-
 let call_prim_func f values =
   match f with
   | Value.Builtin primop -> primop values fake_loc
@@ -49,10 +47,10 @@ let prim_binary_fun ty1 ty2 f = Value.Builtin (fun vals loc ->
         ~provided: (List.length vals)
   )
 
-let unary_fun ty f = build_callable (prim_unary_fun ty f)
-let binary_fun ty1 ty2 f = build_callable (prim_binary_fun ty1 ty2 f)
+let unary_fun ty f = Value.callable_object (lazy (prim_unary_fun ty f))
+let binary_fun ty1 ty2 f = Value.callable_object (lazy (prim_binary_fun ty1 ty2 f))
 
-(* ------------------------------- OPERATORS ------------------------------- *)
+(* ------------------------------- Operators ------------------------------- *)
 let operator_ty field =
   Type.callable_ty ~generic:true
   [(Type.has_field_ty ~generic:true
@@ -71,9 +69,7 @@ let operator_func field =
   Type.gen_var_ty
   (fun obj b ->
       let f =
-        Value.get_object_field
-          (Value.get_object_field obj field)
-          "__call__"
+        Value.get_func_from_callable (Value.get_object_field obj field)
       in
       call_prim_func f [b])
 
@@ -92,23 +88,28 @@ let ge_ty, ge = operator "__ge__"
 let gt_ty, gt = operator "__gt__"
 
 
-(* -------------------------------- CLASSES -------------------------------- *)
+(* -------------------------------- Classes -------------------------------- *)
 (* binds obj to the first parameter of func. Used when creating an instance
  * of a class. `func` and `obj` are of type Value.value
  * func needs to be a callable with `__call__` being a Value.Builtin.
  * returns a callable that has it's first argument bound.
  *)
+
 let bind_self callable obj =
-  let func = Value.get_object_field callable "__call__" in
-  let newfunc = match func with
+  let func = Value.get_func_from_callable callable in
+  let newfunc = lazy (match func with
     | Value.Builtin primop ->
         Value.Builtin (fun vals loc ->
           let vals = obj :: vals
           in primop vals loc)
 
-    | _ -> failwith "Basis.bind_self on non Value.Builtin"
+    | _ -> failwith "Basis.bind_self on non Value.Builtin")
   in
-  build_callable newfunc
+  Value.callable_object newfunc
+
+let instance_def obj field func =
+  let value = (lazy (bind_self (Lazy.force func) obj)) in
+  Value.set_object_field obj field value
 
 let rec int_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
@@ -145,6 +146,7 @@ and string_ty =
      ("__ge__", Type.fun_ty [string_ty] Type.bool_ty);
      ("__gt__", Type.fun_ty [string_ty] Type.bool_ty);
 
+     ("__getitem__", Type.fun_ty [int_ty] string_ty);
      ("__len__", Type.fun_ty [] int_ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
@@ -159,7 +161,7 @@ and list_ty =
      ("__add__", Type.fun_ty [list_ty] list_ty);
 
      ("__len__", Type.fun_ty [] int_ty);
-
+     ("__getitem__", Type.fun_ty [int_ty] Type.gen_var_ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
   and list_ty = Type.TyFold (Some ("List", [Type.gen_var_ty]), inner_record)
@@ -192,109 +194,102 @@ let int_class_ty =
     ]
 
 let int_class =
+
   let rec int_uninitialized_object () =
-    let obj = BatHashtbl.of_list [("val", Value.Int Z.zero)] in
-    BatHashtbl.replace obj "__add__" (bind_self (int_add ()) (Value.Object obj));
-    BatHashtbl.replace obj "__sub__" (bind_self (int_sub ()) (Value.Object obj));
-    BatHashtbl.replace obj "__mul__" (bind_self (int_mul ()) (Value.Object obj));
-    BatHashtbl.replace obj "__div__" (bind_self (int_div ()) (Value.Object obj));
-    BatHashtbl.replace obj "__pow__" (bind_self (int_pow ()) (Value.Object obj));
+    let obj = Value.build_object [("val", lazy (Value.Int Z.zero))] in
+    instance_def obj "__add__" int_add;
+    instance_def obj "__sub__" int_sub;
+    instance_def obj "__mul__" int_mul;
+    instance_def obj "__div__" int_div;
+    instance_def obj "__pow__" int_pow;
 
-    BatHashtbl.replace obj "__eq__"  (bind_self (int_eq ()) (Value.Object obj));
-    BatHashtbl.replace obj "__le__"  (bind_self (int_le ()) (Value.Object obj));
-    BatHashtbl.replace obj "__lt__"  (bind_self (int_lt ()) (Value.Object obj));
-    BatHashtbl.replace obj "__ge__"  (bind_self (int_ge ()) (Value.Object obj));
-    BatHashtbl.replace obj "__gt__"  (bind_self (int_gt ()) (Value.Object obj));
+    instance_def obj "__eq__"  int_eq;
+    instance_def obj "__le__"  int_le;
+    instance_def obj "__lt__"  int_lt;
+    instance_def obj "__ge__"  int_ge;
+    instance_def obj "__gt__"  int_gt;
 
-    BatHashtbl.replace obj "__repr__" (bind_self (int_repr ()) (Value.Object obj));
+    instance_def obj "__repr__" int_repr;
     obj
-  and int_call () =
+  and int_op f =
+    binary_fun
+      int_ty int_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.Int x, Value.Int y) ->
+          let obj = int_uninitialized_object () in
+          Value.set_object_field obj "val" (lazy (Value.Int (f x y)));
+          obj
+        | _ -> failwith "Runtime type error"
+      )
+  and int_comp f =
+    binary_fun
+      int_ty int_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.Int x, Value.Int y) ->
+          Value.Bool (f x y)
+        | _ -> failwith "Runtime type error"
+      )
+  and int_unary f =
+    unary_fun
+      int_ty
+      (fun a ->
+        let self_v = Value.get_object_field a "val" in
+        match self_v with
+        | Value.Int x -> f x
+        | _ -> failwith "Runtime type error"
+      )
+  and int_call = lazy (
     prim_unary_fun
       Type.prim_int_ty
       (fun v -> match v with
         | (Value.Int _) ->
             let obj = int_uninitialized_object () in
-            BatHashtbl.replace obj "val" v;
-            Value.Object obj
+            Value.set_object_field obj "val" (lazy v);
+            obj
         | _ -> failwith "Runtime type error"
       )
-  and int_op f () =
-    binary_fun
-      int_ty int_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.Int x, Value.Int y) ->
-                let obj = int_uninitialized_object () in
-                BatHashtbl.replace obj "val" (Value.Int (f x y));
-                Value.Object obj
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and int_comp f () =
-    binary_fun
-      int_ty int_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.Int x, Value.Int y) ->
-                Value.Bool (f x y)
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
+  )
+  and int_add = lazy (int_op Z.( + ))
+  and int_sub = lazy (int_op Z.( - ))
+  and int_mul = lazy (int_op Z.( * ))
+  and int_div = lazy (int_op Z.( / ))
+  and int_pow = lazy (int_op (fun a b -> Z.(a ** to_int b)))
 
-  and int_unary f () =
-    unary_fun
-      int_ty
-      (fun a -> match a with
-        | (Value.Object self) ->
-            let self_v = BatHashtbl.find self "val" in
-            begin match self_v with
-              | Value.Int x -> f x
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and int_add () = int_op Z.( + ) ()
-  and int_sub () = int_op Z.( - ) ()
-  and int_mul () = int_op Z.( * ) ()
-  and int_div () = int_op Z.( / ) ()
-  and int_pow () = int_op (fun a b -> Z.(a ** to_int b)) ()
+  and int_eq = lazy (int_comp Z.equal)
+  and int_le = lazy (int_comp Z.leq)
+  and int_lt = lazy (int_comp Z.lt)
+  and int_ge = lazy (int_comp Z.geq)
+  and int_gt = lazy (int_comp Z.gt)
 
-  and int_eq () = int_comp Z.equal ()
-  and int_le () = int_comp Z.leq ()
-  and int_lt () = int_comp Z.lt ()
-  and int_ge () = int_comp Z.geq ()
-  and int_gt () = int_comp Z.gt ()
-
-  and int_repr () = int_unary (fun x -> !make_string (Z.to_string x)) ()
+  and int_repr = lazy (int_unary (fun x -> !make_string (Z.to_string x)))
   in
   make_int := (fun x ->
     let obj = int_uninitialized_object () in
-    BatHashtbl.replace obj "val" (Value.Int x);
-    Value.Object obj);
+    Value.set_object_field obj "val" (lazy (Value.Int x));
+    obj
+  );
 
   Value.build_object
-    [("__call__", int_call ());
-     ("__add__", int_add ());
-     ("__sub__", int_sub ());
-     ("__mul__", int_mul ());
-     ("__div__", int_div ());
-     ("__pow__", int_pow ());
+    [("__call__", int_call);
+     ("__add__", int_add);
+     ("__sub__", int_sub);
+     ("__mul__", int_mul);
+     ("__div__", int_div);
+     ("__pow__", int_pow);
 
-     ("__eq__", int_eq ());
-     ("__le__", int_le ());
-     ("__lt__", int_lt ());
-     ("__ge__", int_ge ());
-     ("__gt__", int_gt ());
+     ("__eq__", int_eq);
+     ("__le__", int_le);
+     ("__lt__", int_lt);
+     ("__ge__", int_ge);
+     ("__gt__", int_gt);
 
-     ("__repr__", int_repr ());
+     ("__repr__", int_repr);
     ]
 
 (* -------------------------------- String -------------------------------- *)
@@ -309,110 +304,119 @@ let string_class_ty =
      ("__ge__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
      ("__gt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
 
+     ("__getitem__", Type.fun_ty [string_ty; int_ty] string_ty);
      ("__len__", Type.fun_ty [string_ty] int_ty);
      ("__repr__", Type.fun_ty [string_ty] string_ty);
     ]
 
 let string_class =
   let rec string_uninitialized_object () =
-    let obj = BatHashtbl.of_list [("val", Value.String "")] in
-    BatHashtbl.replace obj "__add__" (bind_self (string_add ()) (Value.Object obj));
-    BatHashtbl.replace obj "__len__" (bind_self (string_len ()) (Value.Object obj));
-    BatHashtbl.replace obj "__eq__" (bind_self (string_eq ()) (Value.Object obj));
-    BatHashtbl.replace obj "__le__" (bind_self (string_le ()) (Value.Object obj));
-    BatHashtbl.replace obj "__lt__" (bind_self (string_lt ()) (Value.Object obj));
-    BatHashtbl.replace obj "__ge__" (bind_self (string_ge ()) (Value.Object obj));
-    BatHashtbl.replace obj "__gt__" (bind_self (string_gt ()) (Value.Object obj));
-    BatHashtbl.replace obj "__repr__" (bind_self (string_repr ()) (Value.Object obj));
+    let obj = Value.build_object [("val", lazy (Value.String ""))] in
+    instance_def obj "__add__" string_add;
+    instance_def obj "__eq__" string_eq;
+    instance_def obj "__le__" string_le;
+    instance_def obj "__lt__" string_lt;
+    instance_def obj "__ge__" string_ge;
+    instance_def obj "__gt__" string_gt;
+
+    instance_def obj "__getitem__" string_getitem;
+    instance_def obj "__len__"  string_len;
+    instance_def obj "__repr__" string_repr;
     obj
-  and string_call () =
+  and string_op f =
+    binary_fun
+      string_ty string_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.String x, Value.String y) ->
+          let obj = string_uninitialized_object () in
+          Value.set_object_field obj "val" (lazy (Value.String (f x y)));
+          obj
+        | _ -> failwith "Runtime type error"
+      )
+  and string_unary f =
+    unary_fun
+      string_ty
+      (fun a ->
+        let self_v = Value.get_object_field a "val" in
+        match self_v with
+        | (Value.String x) -> f x
+        | _ -> failwith "Runtime type error"
+      )
+  and string_comp f =
+    binary_fun
+      string_ty string_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.String x, Value.String y) ->
+          Value.Bool (f x y)
+        | _ -> failwith "Runtime type error"
+      )
+  and string_call = lazy (
     prim_unary_fun
       Type.prim_string_ty
       (fun v -> match v with
         | (Value.String _) ->
             let obj = string_uninitialized_object () in
-            BatHashtbl.replace obj "val" v;
-            Value.Object obj
+            Value.set_object_field obj "val" (lazy v);
+            obj
         | _ -> failwith "Runtime type error"
       )
-  and string_op f () =
-    binary_fun
-      string_ty string_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.String x, Value.String y) ->
-                let obj = string_uninitialized_object () in
-                BatHashtbl.replace obj "val" (Value.String (f x y));
-                Value.Object obj
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and string_unary f () =
-    unary_fun
-      string_ty
-      (fun a -> match a with
-        | (Value.Object self) ->
-            let self_v = BatHashtbl.find self "val" in
-            begin match self_v with
-              | (Value.String x) -> f x
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and string_comp f () =
-    binary_fun
-      string_ty string_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.String x, Value.String y) ->
-                Value.Bool (f x y)
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and string_add () = string_op ( ^ ) ()
+  )
+  and string_add = lazy (string_op ( ^ ))
 
-  and string_eq () = string_comp (=) ()
-  and string_le () = string_comp (<=) ()
-  and string_lt () = string_comp (<) ()
-  and string_ge () = string_comp (>=) ()
-  and string_gt () = string_comp (>) ()
+  and string_eq = lazy (string_comp (=))
+  and string_le = lazy (string_comp (<=))
+  and string_lt = lazy (string_comp (<))
+  and string_ge = lazy (string_comp (>=))
+  and string_gt = lazy (string_comp (>))
 
-  and string_len () =
-    string_unary
-      (fun s -> !make_int (Z.of_int (String.length s))) ()
-  and string_repr () = string_unary
+  and string_getitem = lazy (
+    binary_fun
+      string_ty int_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.String s, Value.Int y) ->
+            !make_string (String.make 1 (String.get s (Z.to_int y)))
+        | _ -> failwith "Runtime type error"
+      )
+  )
+  and string_len = lazy (
+    string_unary (fun s -> !make_int (Z.of_int (String.length s)))
+  )
+  and string_repr = lazy (string_unary
     (fun x ->
       let x = BatString.replace_chars
         (function | '"' -> "\\\"" | c -> String.make 1 c)
         x
       in
-      !make_string ("\"" ^ x ^ "\"")) ()
+      !make_string ("\"" ^ x ^ "\""))
+  )
   in
   make_string := (fun s ->
     let obj = string_uninitialized_object () in
-    BatHashtbl.replace obj "val" (Value.String s);
-    Value.Object obj);
+    Value.set_object_field obj "val" (lazy (Value.String s));
+    obj
+  );
   Value.build_object
-    [("__call__", string_call ());
-     ("__add__", string_add ());
+    [("__call__", string_call);
+     ("__add__", string_add);
 
-     ("__eq__", string_eq ());
-     ("__le__", string_le ());
-     ("__lt__", string_lt ());
-     ("__ge__", string_ge ());
-     ("__gt__", string_gt ());
+     ("__eq__", string_eq);
+     ("__le__", string_le);
+     ("__lt__", string_lt);
+     ("__ge__", string_ge);
+     ("__gt__", string_gt);
 
-     ("__len__", string_len ());
-
-     ("__repr__", string_repr ());
+     ("__len__", string_len);
+     ("__getitem__", string_getitem);
+     ("__repr__", string_repr);
     ]
 
 
@@ -422,83 +426,97 @@ let list_class_ty =
     [("__call__", Type.prim_fun_ty [Type.prim_list_gen_ty] list_ty);
      ("__add__", Type.fun_ty [list_ty; list_ty] list_ty);
      ("__len__", Type.fun_ty [list_ty] int_ty);
+     ("__getitem__", Type.fun_ty [list_ty; int_ty] Type.gen_var_ty);
      ("__repr__", Type.fun_ty [list_ty] string_ty);
     ]
 
 let list_class =
   let rec list_uninitialized_object () =
-    let obj = BatHashtbl.of_list [("val", Value.List [])] in
-    BatHashtbl.replace obj "__add__" (bind_self (list_add ()) (Value.Object obj));
-    BatHashtbl.replace obj "__len__" (bind_self (list_len ()) (Value.Object obj));
-    BatHashtbl.replace obj "__repr__" (bind_self (list_repr ()) (Value.Object obj));
+    let obj = Value.build_object [("val", lazy (Value.List []))] in
+    instance_def obj "__add__" list_add;
+    instance_def obj "__len__" list_len;
+    instance_def obj "__getitem__" list_getitem;
+    instance_def obj "__repr__" list_repr;
     obj
-  and list_call () =
+  and list_op f =
+    binary_fun
+      list_ty list_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.List x, Value.List y) ->
+          let obj = list_uninitialized_object () in
+          Value.set_object_field obj "val" (lazy (Value.List (f x y)));
+          obj
+        | _ -> failwith "Runtime type error"
+      )
+  and list_unary f =
+    unary_fun
+      list_ty
+      (fun a ->
+        let self_v = Value.get_object_field a "val" in
+        match self_v with
+        | (Value.List x) -> f x
+        | _ -> failwith "Runtime type error"
+
+      )
+  and list_comp f =
+    binary_fun
+      list_ty list_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+          | (Value.List x, Value.List y) ->
+            Value.Bool (f x y)
+          | _ -> failwith "Runtime type error"
+      )
+  and list_call = lazy (
     prim_unary_fun
       Type.prim_list_gen_ty
       (fun l -> match l with
         | (Value.List _) ->
             let obj = list_uninitialized_object () in
-            BatHashtbl.replace obj "val" l;
-            Value.Object obj
+            Value.set_object_field obj "val" (lazy l);
+            obj
         | _ -> failwith "Runtime type error"
       )
-  and list_op f () =
-    binary_fun
-      list_ty list_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.List x, Value.List y) ->
-                let obj = list_uninitialized_object () in
-                BatHashtbl.replace obj "val" (Value.List (f x y));
-                Value.Object obj
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and list_unary f () =
-    unary_fun
-      list_ty
-      (fun a -> match a with
-        | (Value.Object self) ->
-            let self_v = BatHashtbl.find self "val" in
-            begin match self_v with
-              | (Value.List x) -> f x
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and list_comp f () =
-    binary_fun
-      list_ty list_ty
-      (fun a b -> match (a, b) with
-        | (Value.Object self, Value.Object other) ->
-            let self_v = BatHashtbl.find self "val" in
-            let other_v = BatHashtbl.find other "val" in
-            begin match self_v, other_v with
-              | (Value.List x, Value.List y) ->
-                Value.Bool (f x y)
-              | _ -> failwith "Runtime type error"
-            end
-        | _ -> failwith "Runtime type error"
-      )
-  and list_add () = list_op ( @ ) ()
-  and list_len () =
+  )
+  and list_add = lazy (list_op ( @ ))
+  and list_len = lazy (
     list_unary
-      (fun l -> !make_int (Z.of_int (List.length l))) ()
-  and list_repr () = list_unary
-    (fun x -> !make_string "[.. list repr not ready ..]") ()
+      (fun l -> !make_int (Z.of_int (List.length l)))
+  )
+  and list_getitem = lazy (
+    binary_fun
+      list_ty int_ty
+      (fun a b ->
+        let self_v = Value.get_object_field a "val" in
+        let other_v = Value.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.List x, Value.Int y) ->
+            List.nth x (Z.to_int y)
+        | _ -> failwith "Runtime type error"
+
+      )
+  )
+  and list_repr = lazy (
+    list_unary
+      (fun x -> !make_string "[.. list repr not ready ..]")
+  )
   in
   make_list := (fun l ->
     let obj = list_uninitialized_object () in
-    BatHashtbl.replace obj "val" (Value.List l);
-    Value.Object obj);
+    Value.set_object_field obj "val" (lazy (Value.List l));
+    obj
+  );
   Value.build_object
-    [("__call__", list_call ());
-     ("__add__", list_add ());
-     ("__repr__", list_repr ());
+    [("__call__", list_call);
+     ("__add__", list_add);
+     ("__len__", list_len);
+     ("__getitem__", list_getitem);
+     ("__repr__", list_repr);
     ]
 (* --------------------------- Common Functions --------------------------- *)
 let __print_string__ =
@@ -517,8 +535,8 @@ let callable =
   unary_fun
     Type.gen_var_ty
     (fun value -> match value with
-      | Value.Object fields ->
-        begin match BatHashtbl.find_option fields "__call__" with
+      | Value.Object _ ->
+        begin match Value.get_object_field_option value "__call__" with
         | Some (Value.Builtin _)
         | Some (Value.Lambda _) -> Value.Bool true
         | _ -> Value.Bool false

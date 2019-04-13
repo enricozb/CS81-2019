@@ -8,7 +8,7 @@ type value =
   | Lambda of lambda * closure
   | Builtin of primop
 
-and name_value_map = (string, value) BatHashtbl.t
+and name_value_map = (string, value Lazy.t) BatHashtbl.t
 
 and env_value =
   | Const of value
@@ -28,8 +28,7 @@ let rec string_of_value = function
       let obj_str =
         String.concat ", " @@
           List.map
-            (fun (field, value) ->
-              field ^ ": " ^ (string_of_value value))
+            (fun (field, value) -> field ^ ": ...")
             (BatHashtbl.bindings field_value_map)
       in
       "{" ^ obj_str ^ "}"
@@ -61,29 +60,45 @@ let prim_zero_arity_fun f = Builtin (fun vals loc ->
         ~provided: (List.length vals)
   )
 
-(*let callable_object prim_func =*)
-  (*let rec callable = Object*)
-    (*(BatHashtbl.of_list [*)
-      (*("__call__", callable);*)
-      (*("~~call~~", prim_func)*)
-    (*])*)
-
-(*let base_object () = Object*)
-  (*(BatHashtbl.of_list [*)
-    (*("__repr__", callable_object (prim_zero_arity_fun (fun () -> "<object>")))*)
-  (*])*)
-
-let build_object fields = Object (BatHashtbl.of_list fields)
+let set_object_field obj field value =
+  match obj with
+  | Object fields ->
+    BatHashtbl.replace fields field value
+  | _ ->
+      failwith "Value.get_object_field called on non object"
 
 let get_object_field obj field =
   match obj with
   | Object fields ->
       begin match BatHashtbl.find_option fields field with
-        | Some v -> v
+        | Some v -> Lazy.force v
         | None ->
             failwith ("Value.get_object_field can't find field '" ^ field ^ "'")
       end
   | _ ->
       failwith "Value.get_object_field called on non object"
 
+let get_object_field_option obj field =
+  match obj with
+  | Object fields ->
+      begin match BatHashtbl.find_option fields field with
+        | Some v -> Some (Lazy.force v)
+        | None -> None
+      end
+  | _ -> None
+
+let rec base_object () = Object (BatHashtbl.create 0)
+  (*(BatHashtbl.of_list [*)
+    (*("__repr__", callable_object (prim_zero_arity_fun (fun () -> String "<object>")))*)
+  (*]))*)
+
+(* TODO: depend on base_object *)
+and build_object fields = Object (BatHashtbl.of_list fields)
+
+and callable_object prim_func =
+  let obj = base_object () in
+  set_object_field obj "__call__" prim_func;
+  obj
+
+let get_func_from_callable callable = get_object_field callable "__call__"
 

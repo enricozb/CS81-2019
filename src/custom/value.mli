@@ -8,7 +8,7 @@ type value =
   | Lambda of lambda * closure
   | Builtin of primop
 
-and name_value_map = (string, value) BatHashtbl.t
+and name_value_map = (string, value Lazy.t) BatHashtbl.t
 
 and env_value =
   | Const of value
@@ -22,6 +22,13 @@ val string_of_value : value -> string
 
 val truthy : Loc.loc -> value -> bool
 
-val build_object : (string * value) list -> value
+val build_object : (string * value Lazy.t) list -> value
 val get_object_field : value -> string -> value
+val get_object_field_option : value -> string -> value option
+val set_object_field : value -> string -> value Lazy.t -> unit
+val get_func_from_callable : value -> value
+
+val base_object : unit -> value
+val callable_object : value Lazy.t -> value
+
 

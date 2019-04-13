@@ -36,7 +36,7 @@ and reduce_ast val_env frames = function
 
   (* TODO: the usage of the hash-table here is really bad... *)
   | Ast.Record (l, field_ast_map) when Ast.NameMap.is_empty field_ast_map ->
-      (Value (Value.Object (BatHashtbl.create 0)), val_env, frames)
+      (Value (Value.base_object ()), val_env, frames)
   | Ast.Record (l, field_ast_map) ->
       let num_bindings = Ast.NameMap.cardinal field_ast_map in
       let (field, ast) = Ast.NameMap.choose field_ast_map in
@@ -50,9 +50,7 @@ and reduce_ast val_env frames = function
 
   | Ast.Lambda (l, params, body_ast) ->
       let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
-      let func_obj =
-        Value.Object (BatHashtbl.of_list [("__call__", lambda)])
-      in
+      let func_obj = Value.callable_object (lazy lambda) in
       (Value func_obj, val_env, frames)
 
   | Ast.Call (l, ast, asts) ->
@@ -71,7 +69,7 @@ and reduce_ast val_env frames = function
        * without this anonymous function *)
       and func_obj = fun () ->
         let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
-        Value.Const (Value.Object (BatHashtbl.of_list [("__call__", lambda)]))
+        Value.Const (Value.callable_object (lazy lambda))
       in
       (Value Value.None, closure (), frames)
 
@@ -141,11 +139,11 @@ and eval_val val_env frames value =
 
   | Frame.Object (l, name, field_value_map, field_ast_map) :: frames
     when Ast.NameMap.is_empty field_ast_map ->
-      BatHashtbl.add field_value_map name value;
+      BatHashtbl.add field_value_map name (lazy value);
       (Value (Value.Object field_value_map), val_env, frames)
   | Frame.Object (l, field, field_value_map, field_ast_map) :: frames ->
       (* add just computed field to map *)
-      BatHashtbl.add field_value_map field value;
+      BatHashtbl.add field_value_map field (lazy value);
       (* get next field and ast to compute *)
       let (field, ast) = Ast.NameMap.choose field_ast_map in
       let field_ast_map = Ast.NameMap.remove field field_ast_map in
@@ -154,21 +152,8 @@ and eval_val val_env frames value =
        Frame.Object (l, field, field_value_map, field_ast_map) :: frames)
 
   | Frame.Field (l, field) :: frames ->
-      begin match value with
-      | Object field_value_map ->
-          begin match BatHashtbl.find_option field_value_map field with
-          | None ->
-              Error.runtime_error
-                l
-                ("Accessing non-existent field '" ^ field ^ "'")
-          | Some value ->
-            (Value value, val_env, frames)
-          end
-      | _ ->
-          Error.runtime_error
-            l
-            ("Accessing field '" ^ field ^ "' of non-object")
-      end
+      let value = Value.get_object_field value field in
+      (Value value, val_env, frames)
 
   | Frame.If (l, suite1, suite2) :: frames ->
       if Value.truthy l value then
@@ -213,29 +198,24 @@ and eval_val val_env frames value =
 
 
 and eval_call l callable_value param_values val_env frames =
-  match callable_value with
-  | Value.Object callable ->
-    begin match BatHashtbl.find_option callable "__call__" with
-    | None -> Error.call_error l (Value.string_of_value callable_value)
-    | Some (Value.Builtin primop) ->
-       (Value (primop param_values l), val_env, frames)
-
-    | Some (Value.Lambda ((params, body_ast), env_fn)) ->
-        if List.length params <> List.length param_values then
-          Error.call_len_error l
-            (* TODO : get name of function or something *)
-            ~fun_ty: ("function")
-            ~expected:(List.length params)
-            ~provided:(List.length param_values)
-        else
-          let val_env' =
-            Env.bind_many
-              params
-              (List.map (fun v -> Value.Const v) param_values)
-              (env_fn ())
-          in
-          (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
-    | _ -> Error.call_field_error l (Value.string_of_value callable_value)
-    end
-  | _ -> Error.call_error l (Value.string_of_value callable_value)
+  match Value.get_func_from_callable callable_value with
+  | Value.Builtin primop ->
+      (Value (primop param_values l), val_env, frames)
+  | Value.Lambda ((params, body_ast), env_fn) ->
+      if List.length params <> List.length param_values then
+        Error.call_len_error l
+          (* TODO : get name of function or something *)
+          ~fun_ty: ("function")
+          ~expected:(List.length params)
+          ~provided:(List.length param_values)
+      else
+        let val_env' =
+          Env.bind_many
+            params
+            (List.map (fun v -> Value.Const v) param_values)
+            (env_fn ())
+        in
+        (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
+  | _ ->
+      Error.call_field_error l (Value.string_of_value callable_value)
 

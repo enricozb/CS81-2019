@@ -202,6 +202,7 @@ let prim_list_ty ty = TyCon ("list", [ty])
 let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
+
 let fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
   TyFold (None, lazy (TyRecord (

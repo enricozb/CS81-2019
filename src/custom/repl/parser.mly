@@ -284,9 +284,10 @@ atom_expr:
     | [] -> $1
     | `Call (l, params) :: rest ->
       Ast.Call (l, iter rest, params)
-
     | `Field (l, name) :: rest ->
       Ast.Field (l, iter rest, name)
+    | `GetItem (l, idx) :: rest ->
+      Ast.Call (l, Ast.Field (l, iter rest, "__getitem__"), [idx])
   in
   iter (List.rev $2)
   }
@@ -331,6 +332,9 @@ trailer_list:
   }
   | LPAREN expr_list_inner RPAREN trailer_list {
     `Call (Loc.span $1 $3, $2) :: $4
+  }
+  | LBRACK expr RBRACK trailer_list {
+    `GetItem (Loc.span $1 $3, $2) :: $4
   }
 
 expr_list_inner:
