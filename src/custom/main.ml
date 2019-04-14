@@ -99,7 +99,7 @@ let rec run ?(quiet=false) (ty_env, mut_env, val_env) ast =
                 (Ast.Call (loc, Ast.Name (loc, "repr"), [Ast.Name (loc, "_")]))
             in
             (* grab raw string out of `repr` *)
-            begin match Value.get_object_field repr "val" with
+            begin match Object.get_object_field repr "val" with
               | Value.String s -> (ty_env, mut_env, val_env, s)
               | _ -> failwith "Main.run: string values is malformed"
             end

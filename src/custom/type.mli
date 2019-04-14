@@ -26,6 +26,11 @@ val prim_string_ty : ty
 val prim_list_gen_ty : ty
 val prim_list_ty : ty -> ty
 
+val int_ty : ty ref
+val string_ty : ty ref
+val list_of_ty : (ty -> ty) ref
+val list_ty : ty ref
+
 val gen_var_ty : ty
 val gen_var_ty2 : ty
 val none_ty : ty

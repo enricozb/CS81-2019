@@ -22,15 +22,3 @@ val string_of_value : value -> string
 
 val truthy : Loc.loc -> value -> bool
 
-val build_object : (string * value Lazy.t) list -> value
-val get_object_field : value -> string -> value
-val get_object_field_option : value -> string -> value option
-val set_object_field : value -> string -> value Lazy.t -> unit
-val get_func_from_callable : value -> value
-
-val get_fields : value -> string list
-
-val base_object : unit -> value
-val callable_object : value Lazy.t -> value
-
-

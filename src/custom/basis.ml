@@ -9,7 +9,7 @@ let call_prim_func f values =
   | Value.Builtin primop -> primop values fake_loc
   | _ -> failwith "Basis.call_prim_func called on non-Value.Builtin"
 
-let unary_fun ty f = Value.callable_object (lazy (
+let unary_fun ty f = Object.callable_object (lazy (
   Value.Builtin (fun vals loc ->
     match vals with
     | [value] ->
@@ -29,7 +29,7 @@ let unary_fun ty f = Value.callable_object (lazy (
   )
 ))
 
-let binary_fun ty1 ty2 f = Value.callable_object (lazy (
+let binary_fun ty1 ty2 f = Object.callable_object (lazy (
   Value.Builtin (fun vals loc ->
     match vals with
     | [value1; value2] ->
@@ -70,7 +70,7 @@ let operator_func field =
   Type.gen_var_ty
   (fun obj b ->
       let f =
-        Value.get_func_from_callable (Value.get_object_field obj field)
+        Object.get_func_from_callable (Object.get_object_field obj field)
       in
       call_prim_func f [b])
 
@@ -97,7 +97,7 @@ let gt_ty, gt = operator "__gt__"
  *)
 
 let bind_self callable obj =
-  let func = Value.get_func_from_callable callable in
+  let func = Object.get_func_from_callable callable in
   let newfunc = lazy (match func with
     | Value.Builtin primop ->
         Value.Builtin (fun vals loc ->
@@ -106,11 +106,11 @@ let bind_self callable obj =
 
     | _ -> failwith "Basis.bind_self on non Value.Builtin")
   in
-  Value.callable_object newfunc
+  Object.callable_object newfunc
 
 let instance_def obj field func =
   let value = (lazy (bind_self (Lazy.force func) obj)) in
-  Value.set_object_field obj field value
+  Object.set_object_field obj field value
 
 let rec int_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
@@ -170,11 +170,11 @@ and list_of_ty ty =
   list_of_ty ty
 
 let list_ty = list_of_ty Type.gen_var_ty
-
-let make_int = ref (fun _ -> failwith "Basis.make_int called before ready")
-let make_string = ref (fun _ -> failwith "Basis.make_string called before ready")
-let make_list = ref (fun _ -> failwith "Basis.make_string called before ready")
-
+let _ =
+  Type.int_ty := int_ty;
+  Type.string_ty := string_ty;
+  Type.list_of_ty := list_of_ty;
+  Type.list_ty := list_ty
 
 (* ---------------------------------- Int ---------------------------------- *)
 
@@ -197,9 +197,8 @@ let int_class_ty =
     ]
 
 let int_class =
-
   let rec int_uninitialized_object () =
-    let obj = Value.build_object [("val", lazy (Value.Int Z.zero))] in
+    let obj = Object.build_object [("val", lazy (Value.Int Z.zero))] in
     instance_def obj "__add__" int_add;
     instance_def obj "__sub__" int_sub;
     instance_def obj "__mul__" int_mul;
@@ -218,12 +217,12 @@ let int_class =
     binary_fun
       int_ty int_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.Int x, Value.Int y) ->
           let obj = int_uninitialized_object () in
-          Value.set_object_field obj "val" (lazy (Value.Int (f x y)));
+          Object.set_object_field obj "val" (lazy (Value.Int (f x y)));
           obj
         | _ -> failwith "Runtime type error"
       )
@@ -231,8 +230,8 @@ let int_class =
     binary_fun
       int_ty int_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.Int x, Value.Int y) ->
           Value.Bool (f x y)
@@ -242,7 +241,7 @@ let int_class =
     unary_fun
       int_ty
       (fun a ->
-        let self_v = Value.get_object_field a "val" in
+        let self_v = Object.get_object_field a "val" in
         match self_v with
         | Value.Int x -> f x
         | _ -> failwith "Runtime type error"
@@ -253,7 +252,7 @@ let int_class =
       (fun v -> match v with
         | (Value.Int _) ->
             let obj = int_uninitialized_object () in
-            Value.set_object_field obj "val" (lazy v);
+            Object.set_object_field obj "val" (lazy v);
             obj
         | _ -> failwith "Runtime type error"
       )
@@ -270,15 +269,15 @@ let int_class =
   and int_ge = lazy (int_comp Z.geq)
   and int_gt = lazy (int_comp Z.gt)
 
-  and int_repr = lazy (int_unary (fun x -> !make_string (Z.to_string x)))
+  and int_repr = lazy (int_unary (fun x -> !Object.make_string (Z.to_string x)))
   in
-  make_int := (fun x ->
+  Object.make_int := (fun x ->
     let obj = int_uninitialized_object () in
-    Value.set_object_field obj "val" (lazy (Value.Int x));
+    Object.set_object_field obj "val" (lazy (Value.Int x));
     obj
   );
 
-  Value.build_object
+  Object.build_object
     [("__call__", int_call);
      ("__add__", int_add);
      ("__sub__", int_sub);
@@ -314,7 +313,7 @@ let string_class_ty =
 
 let string_class =
   let rec string_uninitialized_object () =
-    let obj = Value.build_object [("val", lazy (Value.String ""))] in
+    let obj = Object.build_object [("val", lazy (Value.String ""))] in
     instance_def obj "__add__" string_add;
     instance_def obj "__eq__" string_eq;
     instance_def obj "__le__" string_le;
@@ -330,12 +329,12 @@ let string_class =
     binary_fun
       string_ty string_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.String x, Value.String y) ->
           let obj = string_uninitialized_object () in
-          Value.set_object_field obj "val" (lazy (Value.String (f x y)));
+          Object.set_object_field obj "val" (lazy (Value.String (f x y)));
           obj
         | _ -> failwith "Runtime type error"
       )
@@ -343,7 +342,7 @@ let string_class =
     unary_fun
       string_ty
       (fun a ->
-        let self_v = Value.get_object_field a "val" in
+        let self_v = Object.get_object_field a "val" in
         match self_v with
         | (Value.String x) -> f x
         | _ -> failwith "Runtime type error"
@@ -352,8 +351,8 @@ let string_class =
     binary_fun
       string_ty string_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.String x, Value.String y) ->
           Value.Bool (f x y)
@@ -365,7 +364,7 @@ let string_class =
       (fun v -> match v with
         | (Value.String _) ->
             let obj = string_uninitialized_object () in
-            Value.set_object_field obj "val" (lazy v);
+            Object.set_object_field obj "val" (lazy v);
             obj
         | _ -> failwith "Runtime type error"
       )
@@ -382,16 +381,16 @@ let string_class =
     binary_fun
       string_ty int_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.String s, Value.Int y) ->
-            !make_string (String.make 1 (String.get s (Z.to_int y)))
+            !Object.make_string (String.make 1 (String.get s (Z.to_int y)))
         | _ -> failwith "Runtime type error"
       )
   )
   and string_len = lazy (
-    string_unary (fun s -> !make_int (Z.of_int (String.length s)))
+    string_unary (fun s -> !Object.make_int (Z.of_int (String.length s)))
   )
   and string_repr = lazy (string_unary
     (fun x ->
@@ -399,15 +398,15 @@ let string_class =
         (function | '"' -> "\\\"" | c -> String.make 1 c)
         x
       in
-      !make_string ("\"" ^ x ^ "\""))
+      !Object.make_string ("\"" ^ x ^ "\""))
   )
   in
-  make_string := (fun s ->
+  Object.make_string := (fun s ->
     let obj = string_uninitialized_object () in
-    Value.set_object_field obj "val" (lazy (Value.String s));
+    Object.set_object_field obj "val" (lazy (Value.String s));
     obj
   );
-  Value.build_object
+  Object.build_object
     [("__call__", string_call);
      ("__add__", string_add);
 
@@ -435,7 +434,7 @@ let list_class_ty =
 
 let list_class =
   let rec list_uninitialized_object () =
-    let obj = Value.build_object [("val", lazy (Value.List []))] in
+    let obj = Object.build_object [("val", lazy (Value.List []))] in
     instance_def obj "__add__" list_add;
     instance_def obj "__len__" list_len;
     instance_def obj "__getitem__" list_getitem;
@@ -445,12 +444,12 @@ let list_class =
     binary_fun
       list_ty list_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.List x, Value.List y) ->
           let obj = list_uninitialized_object () in
-          Value.set_object_field obj "val" (lazy (Value.List (f x y)));
+          Object.set_object_field obj "val" (lazy (Value.List (f x y)));
           obj
         | _ -> failwith "Runtime type error"
       )
@@ -458,7 +457,7 @@ let list_class =
     unary_fun
       list_ty
       (fun a ->
-        let self_v = Value.get_object_field a "val" in
+        let self_v = Object.get_object_field a "val" in
         match self_v with
         | (Value.List x) -> f x
         | _ -> failwith "Runtime type error"
@@ -468,8 +467,8 @@ let list_class =
     binary_fun
       list_ty list_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
           | (Value.List x, Value.List y) ->
             Value.Bool (f x y)
@@ -481,7 +480,7 @@ let list_class =
       (fun l -> match l with
         | (Value.List _) ->
             let obj = list_uninitialized_object () in
-            Value.set_object_field obj "val" (lazy l);
+            Object.set_object_field obj "val" (lazy l);
             obj
         | _ -> failwith "Runtime type error"
       )
@@ -489,14 +488,14 @@ let list_class =
   and list_add = lazy (list_op ( @ ))
   and list_len = lazy (
     list_unary
-      (fun l -> !make_int (Z.of_int (List.length l)))
+      (fun l -> !Object.make_int (Z.of_int (List.length l)))
   )
   and list_getitem = lazy (
     binary_fun
       list_ty int_ty
       (fun a b ->
-        let self_v = Value.get_object_field a "val" in
-        let other_v = Value.get_object_field b "val" in
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.List x, Value.Int y) ->
             List.nth x (Z.to_int y)
@@ -506,15 +505,15 @@ let list_class =
   )
   and list_repr = lazy (
     list_unary
-      (fun x -> !make_string "[.. list repr not ready ..]")
+      (fun x -> !Object.make_string "[.. list repr not ready ..]")
   )
   in
-  make_list := (fun l ->
+  Object.make_list := (fun l ->
     let obj = list_uninitialized_object () in
-    Value.set_object_field obj "val" (lazy (Value.List l));
+    Object.set_object_field obj "val" (lazy (Value.List l));
     obj
   );
-  Value.build_object
+  Object.build_object
     [("__call__", list_call);
      ("__add__", list_add);
      ("__len__", list_len);
@@ -526,7 +525,7 @@ let __print_string__ =
   unary_fun
     string_ty
     (fun string_obj ->
-      let raw_str = Value.get_object_field string_obj "val" in
+      let raw_str = Object.get_object_field string_obj "val" in
       match raw_str with
       | Value.String s ->
           Printf.printf "%s\n" s;
@@ -539,7 +538,7 @@ let callable =
     Type.gen_var_ty
     (fun value -> match value with
       | Value.Object _ ->
-        begin match Value.get_object_field_option value "__call__" with
+        begin match Object.get_object_field_option value "__call__" with
         | Some (Value.Builtin _)
         | Some (Value.Lambda _) -> Value.Bool true
         | _ -> Value.Bool false
@@ -552,7 +551,7 @@ let dir =
     Type.gen_var_ty
     (fun value -> match value with
       | Value.Object _ ->
-          !make_list (List.map !make_string (Value.get_fields value))
+          !Object.make_list (List.map !Object.make_string (Object.get_fields value))
       | _ -> failwith "Basis.dir called on non-object"
     )
 

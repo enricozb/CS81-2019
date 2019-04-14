@@ -36,21 +36,20 @@ and reduce_ast val_env frames = function
 
   (* TODO: the usage of the hash-table here is really bad... *)
   | Ast.Record (l, field_ast_map) when Ast.NameMap.is_empty field_ast_map ->
-      (Value (Value.base_object ()), val_env, frames)
+      (Value (Object.base_object ()), val_env, frames)
   | Ast.Record (l, field_ast_map) ->
-      let num_bindings = Ast.NameMap.cardinal field_ast_map in
       let (field, ast) = Ast.NameMap.choose field_ast_map in
       let field_ast_map = Ast.NameMap.remove field field_ast_map in
       (Ast ast,
        val_env,
-       Frame.Object (l, field, BatHashtbl.create num_bindings, field_ast_map) :: frames)
+       Frame.Object (l, field, Object.base_object (), field_ast_map) :: frames)
 
   | Ast.Field (l, ast, field) ->
       (Ast ast, val_env, Frame.Field (l, field) :: frames)
 
   | Ast.Lambda (l, params, body_ast) ->
       let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
-      let func_obj = Value.callable_object (lazy lambda) in
+      let func_obj = Object.callable_object (lazy lambda) in
       (Value func_obj, val_env, frames)
 
   | Ast.Call (l, ast, asts) ->
@@ -64,12 +63,9 @@ and reduce_ast val_env frames = function
 
   | Ast.Def (l, name, params, suite) ->
       let rec closure () = Env.bind name (func_obj ()) val_env
-      (* TODO: absolutely no idea why func_obj needs to be a function here,
-       * the compiler complains and I can't have this recursive definition
-       * without this anonymous function *)
       and func_obj = fun () ->
         let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
-        Value.Const (Value.callable_object (lazy lambda))
+        Value.Const (Object.callable_object ~name:(Some name) (lazy lambda))
       in
       (Value Value.None, closure (), frames)
 
@@ -137,22 +133,22 @@ and eval_val val_env frames value =
   | Frame.List (l, values_so_far, ast :: asts) :: frames ->
       (Ast ast, val_env, (Frame.List (l, value :: values_so_far, asts) :: frames))
 
-  | Frame.Object (l, name, field_value_map, field_ast_map) :: frames
+  | Frame.Object (l, name, obj, field_ast_map) :: frames
     when Ast.NameMap.is_empty field_ast_map ->
-      BatHashtbl.add field_value_map name (lazy value);
-      (Value (Value.Object field_value_map), val_env, frames)
-  | Frame.Object (l, field, field_value_map, field_ast_map) :: frames ->
+      Object.set_object_field obj name (lazy value);
+      (Value obj, val_env, frames)
+  | Frame.Object (l, field, obj, field_ast_map) :: frames ->
       (* add just computed field to map *)
-      BatHashtbl.add field_value_map field (lazy value);
+      Object.set_object_field obj field (lazy value);
       (* get next field and ast to compute *)
       let (field, ast) = Ast.NameMap.choose field_ast_map in
       let field_ast_map = Ast.NameMap.remove field field_ast_map in
       (Ast ast,
        val_env,
-       Frame.Object (l, field, field_value_map, field_ast_map) :: frames)
+       Frame.Object (l, field, obj, field_ast_map) :: frames)
 
   | Frame.Field (l, field) :: frames ->
-      let value = Value.get_object_field value field in
+      let value = Object.get_object_field value field in
       (Value value, val_env, frames)
 
   | Frame.If (l, suite1, suite2) :: frames ->
@@ -198,7 +194,7 @@ and eval_val val_env frames value =
 
 
 and eval_call l callable_value param_values val_env frames =
-  match Value.get_func_from_callable callable_value with
+  match Object.get_func_from_callable callable_value with
   | Value.Builtin primop ->
       (Value (primop param_values l), val_env, frames)
   | Value.Lambda ((params, body_ast), env_fn) ->

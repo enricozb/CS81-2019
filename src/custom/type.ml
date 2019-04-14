@@ -180,8 +180,8 @@ let rec occurs loc tyvar_id tyvar_level ty =
         Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
 				recurse rest_ty
 
-    (* TODO: this has to change for generic classes *)
-    | TyFold (Some (id, param_tys), ty) -> ()
+    | TyFold (Some (id, param_tys), ty) ->
+        List.iter recurse param_tys
     | TyFold (None, ty) ->
         recurse (Lazy.force ty)
 
@@ -198,29 +198,12 @@ and fresh_gen_tyvar _ =
   TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
-let bare_record_ty name_ty_list =
-  TyRecord (
-    TyRowExtend (
-      List.fold_left
-        (fun name_ty_map (name, ty) ->
-          assert (not (Ast.NameMap.mem name name_ty_map));
-          Ast.NameMap.add name ty name_ty_map)
-      Ast.NameMap.empty name_ty_list,
-      TyRowEmpty
-    )
-  )
+(* initialized in basis.ml *)
+let int_ty = ref (TyCon ("FakeInt", []))
+let string_ty = ref (TyCon ("FakeString", []))
+let list_ty = ref (TyCon ("FakeList", []))
+let list_of_ty = ref (fun _ -> TyCon ("FakeList", []))
 
-let folded_record_ty tycon name_ty_list =
-  TyFold (tycon, lazy (TyRecord (
-    TyRowExtend (
-      List.fold_left
-        (fun name_ty_map (name, ty) ->
-          assert (not (Ast.NameMap.mem name name_ty_map));
-          Ast.NameMap.add name ty name_ty_map)
-      Ast.NameMap.empty name_ty_list,
-      TyRowEmpty
-    )
-  )))
 
 let gen_var_ty = TyVar {contents = Generic "a"}
 let gen_var_ty2 = TyVar {contents = Generic "b"}
@@ -234,7 +217,37 @@ let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 
-let fun_ty param_tys ret_ty =
+let rec base_record_fields () =
+    List.fold_left
+      (fun name_ty_map (name, ty) ->
+        Ast.NameMap.add name ty name_ty_map)
+    Ast.NameMap.empty [
+      ("__repr__", fun_ty [] !string_ty);
+    ]
+
+and bare_record_ty name_ty_list =
+  TyRecord (
+    TyRowExtend (
+      List.fold_left
+        (fun name_ty_map (name, ty) ->
+          Ast.NameMap.add name ty name_ty_map)
+      (base_record_fields ()) name_ty_list,
+      TyRowEmpty
+    )
+  )
+
+and folded_record_ty tycon name_ty_list =
+  TyFold (tycon, lazy (TyRecord (
+    TyRowExtend (
+      List.fold_left
+        (fun name_ty_map (name, ty) ->
+          Ast.NameMap.add name ty name_ty_map)
+      (base_record_fields ()) name_ty_list,
+      TyRowEmpty
+    )
+  )))
+
+and fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
   let rec inner_record = lazy (bare_record_ty [
     ("__call__", func_type);
@@ -562,6 +575,12 @@ and infer level ty_env mut_env ast = match ast with
           (infer level ty_env mut_env)
 					name_ast_map
 			in
+      let name_ty_map =
+        Ast.NameMap.union
+          (fun _ ty1 ty2 -> Some ty2)
+          (base_record_fields ())
+          name_ty_map
+      in
       if Ast.NameMap.is_empty name_ty_map then
         TyFold (None, lazy (TyRecord TyRowEmpty))
       else
