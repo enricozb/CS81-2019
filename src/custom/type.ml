@@ -129,10 +129,17 @@ let rec string_of_type ty =
 				in
 				name_ty_map_str ^ rest_ty_str
 
-    | TyFold (Some (id, []), _) ->
-        id
-    | TyFold (Some (id, param_tys), _) ->
-        id ^ "[" ^ (recurse_tys param_tys) ^ "]"
+    | TyFold (Some (id, []), rec_ty) ->
+        if toplevel then
+          id ^ recurse (Lazy.force rec_ty)
+        else
+          id
+    | TyFold (Some (id, param_tys), rec_ty) ->
+        if toplevel then
+          id ^ "[" ^ (recurse_tys param_tys) ^ "]: " ^ recurse (Lazy.force rec_ty)
+        else
+          id ^ "[" ^ (recurse_tys param_tys) ^ "]"
+
     | TyFold (None, ty) -> recurse (Lazy.force ty)
 
     | TyUnfold (TyFold (_, ty)) -> recurse (Lazy.force ty)
@@ -191,39 +198,6 @@ and fresh_gen_tyvar _ =
   TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
-let gen_var_ty = TyVar {contents = Generic "a"}
-let gen_var_ty2 = TyVar {contents = Generic "b"}
-
-let prim_int_ty = TyCon ("int", [])
-let prim_string_ty = TyCon ("string", [])
-let prim_list_gen_ty = TyCon ("list", [gen_var_ty])
-let prim_list_ty ty = TyCon ("list", [ty])
-
-let none_ty = TyCon ("None", [])
-let bool_ty = TyCon ("Bool", [])
-let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
-
-let fun_ty param_tys ret_ty =
-  let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyFold (None, lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton "__call__" prim_fun_ty,
-      TyRowEmpty
-    )
-  )))
-
-let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
-  let prim_fun_ty = prim_fun_ty param_tys ret_ty in
-  TyFold (None, lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton "__call__" prim_fun_ty,
-      if generic then
-        fresh_gen_tyvar ()
-      else
-        fresh_tyvar level ()
-    )
-  )))
-
 let bare_record_ty name_ty_list =
   TyRecord (
     TyRowExtend (
@@ -245,6 +219,41 @@ let folded_record_ty tycon name_ty_list =
           Ast.NameMap.add name ty name_ty_map)
       Ast.NameMap.empty name_ty_list,
       TyRowEmpty
+    )
+  )))
+
+let gen_var_ty = TyVar {contents = Generic "a"}
+let gen_var_ty2 = TyVar {contents = Generic "b"}
+
+let prim_int_ty = TyCon ("int", [])
+let prim_string_ty = TyCon ("string", [])
+let prim_list_gen_ty = TyCon ("list", [gen_var_ty])
+let prim_list_ty ty = TyCon ("list", [ty])
+
+let none_ty = TyCon ("None", [])
+let bool_ty = TyCon ("Bool", [])
+let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
+
+let fun_ty param_tys ret_ty =
+  let prim_fun_ty = prim_fun_ty param_tys ret_ty in
+  let rec inner_record = lazy (bare_record_ty [
+    ("__call__", func_type);
+    ("~~call~~", prim_fun_ty)
+  ])
+  and func_type =
+    TyFold (Some ("Function", param_tys @ [ret_ty]), inner_record)
+  in
+  func_type
+
+let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
+  let fun_ty = fun_ty param_tys ret_ty in
+  TyFold (Some ("Callable", param_tys @ [ret_ty]), lazy (TyRecord (
+    TyRowExtend (
+      Ast.NameMap.singleton "__call__" fun_ty,
+      if generic then
+        fresh_gen_tyvar ()
+      else
+        fresh_tyvar level ()
     )
   )))
 
@@ -311,20 +320,18 @@ let rec unify loc ty1 ty2 =
     | ty2, TyUnfold (TyFold (_, ty1)) ->
         unify (Lazy.force ty1) ty2
 
-    (* TODO: should this check the names? *)
-    | TyFold (Some (id1, param_tys1), _),
-      TyFold (Some (id2, param_tys2), _) ->
-          unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
-          (*if id1 <> id2 then*)
-            (*Error.unify_error loc*)
-              (*(string_of_type ty1)*)
-              (*(string_of_type ty2)*)
-          (*else*)
-            (*unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)*)
+    (* TODO: is this the right way to check the names? *)
+    | TyFold (Some (id1, param_tys1), rec_ty1),
+      TyFold (Some (id2, param_tys2), rec_ty2) ->
+          if id1 = id2 then
+            unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
+          else
+            unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
 
     | TyFold (_, ty1), TyFold (_, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)
 
+    (* TODO: no idea if this should be here... *)
     | TyFold (Some (name1, params1), _), TyCon (name2, params2)
     | TyCon (name1, params1), TyFold (Some (name2, params2), _) ->
         unify (TyCon (name1, params1)) (TyCon (name2, params2))
@@ -426,9 +433,9 @@ let rec generalize level ty =
 
   | TyFold (None, ty) ->
       TyFold (None, lazy (generalize level (Lazy.force ty)))
-  | TyFold (Some name, ty) ->
-      (* TODO: this has to change for generic classes *)
-      TyFold (Some name, ty)
+  | TyFold (Some (id, param_tys), ty) ->
+      TyFold (Some (id, List.map (generalize level) param_tys),
+              lazy (generalize level @@ Lazy.force ty))
 
   | TyUnfold _ ->
       failwith "Type.generalize on TyUnfold"

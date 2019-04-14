@@ -216,6 +216,9 @@ flow_stmt:
   | RETURN expr {
     Ast.Return (Loc.span $1 (Ast.loc_of_ast $2), $2)
   }
+  | RETURN {
+    Ast.Return ($1, Ast.Name ($1, "none"))
+  }
   | BREAK { Ast.Break $1 }
   | CONTINUE { Ast.Continue $1 }
 

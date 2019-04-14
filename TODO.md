@@ -5,7 +5,6 @@
   and stuff. It should be `$1.l` or `$1.v`, much more readable.
 - Clean up the stupid stuff at the bottom of lexer.mll
 - Add tuples
-- Add empty return
 - Add GADTs
 - Relax the value restriction according to
   [this paper](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)

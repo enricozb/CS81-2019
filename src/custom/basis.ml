@@ -9,46 +9,47 @@ let call_prim_func f values =
   | Value.Builtin primop -> primop values fake_loc
   | _ -> failwith "Basis.call_prim_func called on non-Value.Builtin"
 
-let prim_unary_fun ty f = Value.Builtin (fun vals loc ->
-  match vals with
-  | [value] ->
-    begin try
-      f value
-    with Match_failure e ->
-      Error.type_mismatch_error loc
-        ~expected: (Type.string_of_type ty)
-        ~provided: (Value.string_of_value value)
-    end
+let unary_fun ty f = Value.callable_object (lazy (
+  Value.Builtin (fun vals loc ->
+    match vals with
+    | [value] ->
+      begin try
+        f value
+      with Match_failure e ->
+        Error.type_mismatch_error loc
+          ~expected: (Type.string_of_type ty)
+          ~provided: (Value.string_of_value value)
+      end
 
-  | _ ->
-      Error.call_len_error loc
-        ~fun_ty: "builitn"
-        ~expected: 1
-        ~provided: (List.length vals)
+    | _ ->
+        Error.call_len_error loc
+          ~fun_ty: "builitn"
+          ~expected: 1
+          ~provided: (List.length vals)
   )
+))
 
-let prim_binary_fun ty1 ty2 f = Value.Builtin (fun vals loc ->
-  match vals with
-  | [value1; value2] ->
-    begin try
-      f value1 value2
-    with Match_failure e ->
-      Error.type_mismatch_error loc
-        ~expected: ("{" ^ Type.string_of_type ty1 ^ ", " ^
-                          Type.string_of_type ty2 ^ "}")
-        ~provided: ("{" ^ Value.string_of_value value1 ^ ", " ^
-                         Value.string_of_value value2 ^ "}")
-    end
+let binary_fun ty1 ty2 f = Value.callable_object (lazy (
+  Value.Builtin (fun vals loc ->
+    match vals with
+    | [value1; value2] ->
+      begin try
+        f value1 value2
+      with Match_failure e ->
+        Error.type_mismatch_error loc
+          ~expected: ("{" ^ Type.string_of_type ty1 ^ ", " ^
+                            Type.string_of_type ty2 ^ "}")
+          ~provided: ("{" ^ Value.string_of_value value1 ^ ", " ^
+                           Value.string_of_value value2 ^ "}")
+      end
 
-  | _ ->
-      Error.call_len_error loc
-        ~fun_ty: "builitn"
-        ~expected: 2
-        ~provided: (List.length vals)
+    | _ ->
+        Error.call_len_error loc
+          ~fun_ty: "builitn"
+          ~expected: 2
+          ~provided: (List.length vals)
   )
-
-let unary_fun ty f = Value.callable_object (lazy (prim_unary_fun ty f))
-let binary_fun ty1 ty2 f = Value.callable_object (lazy (prim_binary_fun ty1 ty2 f))
+))
 
 (* ------------------------------- Operators ------------------------------- *)
 let operator_ty field =
@@ -154,19 +155,21 @@ and string_ty =
   in
   string_ty
 
-and list_ty =
+and list_of_ty ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_list_gen_ty);
-     ("__add__", Type.fun_ty [list_ty] list_ty);
+     ("__add__", Type.fun_ty [list_of_ty ty] (list_of_ty ty));
 
      ("__len__", Type.fun_ty [] int_ty);
-     ("__getitem__", Type.fun_ty [int_ty] Type.gen_var_ty);
+     ("__getitem__", Type.fun_ty [int_ty] ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
-  and list_ty = Type.TyFold (Some ("List", [Type.gen_var_ty]), inner_record)
+  and list_of_ty ty = Type.TyFold (Some ("List", [ty]), inner_record)
   in
-  list_ty
+  list_of_ty ty
+
+let list_ty = list_of_ty Type.gen_var_ty
 
 let make_int = ref (fun _ -> failwith "Basis.make_int called before ready")
 let make_string = ref (fun _ -> failwith "Basis.make_string called before ready")
@@ -177,7 +180,7 @@ let make_list = ref (fun _ -> failwith "Basis.make_string called before ready")
 
 let int_class_ty =
   Type.folded_record_ty None
-    [("__call__", Type.prim_fun_ty [Type.prim_int_ty] int_ty);
+    [("__call__", Type.fun_ty [Type.prim_int_ty] int_ty);
      ("__add__", Type.fun_ty [int_ty; int_ty] int_ty);
      ("__sub__", Type.fun_ty [int_ty; int_ty] int_ty);
      ("__mul__", Type.fun_ty [int_ty; int_ty] int_ty);
@@ -245,7 +248,7 @@ let int_class =
         | _ -> failwith "Runtime type error"
       )
   and int_call = lazy (
-    prim_unary_fun
+    unary_fun
       Type.prim_int_ty
       (fun v -> match v with
         | (Value.Int _) ->
@@ -295,7 +298,7 @@ let int_class =
 (* -------------------------------- String -------------------------------- *)
 let string_class_ty =
   Type.folded_record_ty None
-    [("__call__", Type.prim_fun_ty [Type.prim_string_ty] string_ty);
+    [("__call__", Type.fun_ty [Type.prim_string_ty] string_ty);
      ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
 
      ("__eq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
@@ -357,7 +360,7 @@ let string_class =
         | _ -> failwith "Runtime type error"
       )
   and string_call = lazy (
-    prim_unary_fun
+    unary_fun
       Type.prim_string_ty
       (fun v -> match v with
         | (Value.String _) ->
@@ -423,7 +426,7 @@ let string_class =
 (* -------------------------------- List[a] -------------------------------- *)
 let list_class_ty =
   Type.folded_record_ty None
-    [("__call__", Type.prim_fun_ty [Type.prim_list_gen_ty] list_ty);
+    [("__call__", Type.fun_ty [Type.prim_list_gen_ty] list_ty);
      ("__add__", Type.fun_ty [list_ty; list_ty] list_ty);
      ("__len__", Type.fun_ty [list_ty] int_ty);
      ("__getitem__", Type.fun_ty [list_ty; int_ty] Type.gen_var_ty);
@@ -473,7 +476,7 @@ let list_class =
           | _ -> failwith "Runtime type error"
       )
   and list_call = lazy (
-    prim_unary_fun
+    unary_fun
       Type.prim_list_gen_ty
       (fun l -> match l with
         | (Value.List _) ->
@@ -544,6 +547,15 @@ let callable =
       | _ -> Value.Bool false
     )
 
+let dir =
+  unary_fun
+    Type.gen_var_ty
+    (fun value -> match value with
+      | Value.Object _ ->
+          !make_list (List.map !make_string (Value.get_fields value))
+      | _ -> failwith "Basis.dir called on non-object"
+    )
+
 (* -------------------------- Basis Environments -------------------------- *)
 let val_env = Env.bind_pairs
   (List.map (fun (name, v) -> (name, Value.Const v))
@@ -571,6 +583,7 @@ let val_env = Env.bind_pairs
    ("__print_string__", __print_string__);
 
    ("callable", callable);
+   ("dir", dir);
 
    ("Int", int_class);
    ("String", string_class);
@@ -604,6 +617,7 @@ let ty_env = Env.bind_pairs
    ("__print_string__", Type.fun_ty [string_ty] Type.none_ty);
 
    ("callable", Type.fun_ty [Type.gen_var_ty] Type.bool_ty);
+   ("dir", Type.fun_ty [Type.gen_var_ty] (list_of_ty string_ty));
 
    ("Int", int_class_ty);
    ("String", string_class_ty);

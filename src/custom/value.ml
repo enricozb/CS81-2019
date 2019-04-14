@@ -76,7 +76,7 @@ let get_object_field obj field =
             failwith ("Value.get_object_field can't find field '" ^ field ^ "'")
       end
   | _ ->
-      failwith "Value.get_object_field called on non object"
+      failwith ("Value.get_object_field called on non object (" ^ field ^ ")")
 
 let get_object_field_option obj field =
   match obj with
@@ -87,6 +87,11 @@ let get_object_field_option obj field =
       end
   | _ -> None
 
+let get_fields obj =
+  match obj with
+  | Object fields -> List.map fst (BatHashtbl.to_list fields)
+  | _ -> failwith "Value.get_fields called on non-object"
+
 let rec base_object () = Object (BatHashtbl.create 0)
   (*(BatHashtbl.of_list [*)
     (*("__repr__", callable_object (prim_zero_arity_fun (fun () -> String "<object>")))*)
@@ -96,9 +101,11 @@ let rec base_object () = Object (BatHashtbl.create 0)
 and build_object fields = Object (BatHashtbl.of_list fields)
 
 and callable_object prim_func =
-  let obj = base_object () in
-  set_object_field obj "__call__" prim_func;
+  let rec obj = base_object () in
+  set_object_field obj "__call__" (lazy obj);
+  set_object_field obj "~~call~~" prim_func;
   obj
 
-let get_func_from_callable callable = get_object_field callable "__call__"
+let get_func_from_callable callable =
+  get_object_field (get_object_field callable "__call__") "~~call~~"
 
