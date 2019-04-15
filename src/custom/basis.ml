@@ -1,12 +1,6 @@
-let fake_loc = Loc.({filename = "none";
-                 start_line = -1;
-                 start_char = -1;
-                 end_line   = -1;
-                 end_char   = -1 })
-
 let call_prim_func f values =
   match f with
-  | Value.Builtin primop -> primop values fake_loc
+  | Value.Builtin primop -> primop values Loc.fake_loc
   | _ -> failwith "Basis.call_prim_func called on non-Value.Builtin"
 
 let unary_fun ty f = Object.callable_object (lazy (
@@ -83,6 +77,7 @@ let div_ty, div = operator "__div__"
 let pow_ty, pow = operator "__pow__"
 
 let eq_ty, eq = operator "__eq__"
+let neq_ty, neq = operator "__neq__"
 let le_ty, le = operator "__le__"
 let lt_ty, lt = operator "__lt__"
 let ge_ty, ge = operator "__ge__"
@@ -123,6 +118,7 @@ let rec int_ty =
      ("__pow__", Type.fun_ty [int_ty] int_ty);
 
      ("__eq__", Type.fun_ty [int_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [int_ty] Type.bool_ty);
      ("__le__", Type.fun_ty [int_ty] Type.bool_ty);
      ("__lt__", Type.fun_ty [int_ty] Type.bool_ty);
      ("__ge__", Type.fun_ty [int_ty] Type.bool_ty);
@@ -142,6 +138,7 @@ and string_ty =
      ("__add__", Type.fun_ty [string_ty] (string_ty));
 
      ("__eq__", Type.fun_ty [string_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [string_ty] Type.bool_ty);
      ("__le__", Type.fun_ty [string_ty] Type.bool_ty);
      ("__lt__", Type.fun_ty [string_ty] Type.bool_ty);
      ("__ge__", Type.fun_ty [string_ty] Type.bool_ty);
@@ -188,6 +185,7 @@ let int_class_ty =
      ("__pow__", Type.fun_ty [int_ty; int_ty] int_ty);
 
      ("__eq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
      ("__le__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
      ("__lt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
      ("__ge__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
@@ -206,6 +204,7 @@ let int_class =
     instance_def obj "__pow__" int_pow;
 
     instance_def obj "__eq__"  int_eq;
+    instance_def obj "__neq__"  int_neq;
     instance_def obj "__le__"  int_le;
     instance_def obj "__lt__"  int_lt;
     instance_def obj "__ge__"  int_ge;
@@ -264,6 +263,7 @@ let int_class =
   and int_pow = lazy (int_op (fun a b -> Z.(a ** to_int b)))
 
   and int_eq = lazy (int_comp Z.equal)
+  and int_neq = lazy (int_comp (fun a b -> not (Z.equal a b)))
   and int_le = lazy (int_comp Z.leq)
   and int_lt = lazy (int_comp Z.lt)
   and int_ge = lazy (int_comp Z.geq)
@@ -301,6 +301,7 @@ let string_class_ty =
      ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
 
      ("__eq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
      ("__le__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
      ("__lt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
      ("__ge__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
@@ -316,6 +317,7 @@ let string_class =
     let obj = Object.build_object [("val", lazy (Value.String ""))] in
     instance_def obj "__add__" string_add;
     instance_def obj "__eq__" string_eq;
+    instance_def obj "__neq__" string_neq;
     instance_def obj "__le__" string_le;
     instance_def obj "__lt__" string_lt;
     instance_def obj "__ge__" string_ge;
@@ -372,6 +374,7 @@ let string_class =
   and string_add = lazy (string_op ( ^ ))
 
   and string_eq = lazy (string_comp (=))
+  and string_neq = lazy (string_comp (!=))
   and string_le = lazy (string_comp (<=))
   and string_lt = lazy (string_comp (<))
   and string_ge = lazy (string_comp (>=))
@@ -569,11 +572,11 @@ let val_env = Env.bind_pairs
    ("^", pow);
 
    ("==", eq);
+   ("!=", neq);
    ("<=", le);
    ("<",  lt);
    (">=", ge);
    (">",  gt);
-   (*("!=", num_num_to_bool (fun a b -> not (Z.equal a b)));*)
 
    ("false", Value.Bool false);
    ("true", Value.Bool true);
@@ -603,11 +606,11 @@ let ty_env = Env.bind_pairs
    ("^", pow_ty);
 
    ("==", eq_ty);
+   ("!=",  neq_ty);
    ("<=", le_ty);
    ("<",  lt_ty);
    (">=", ge_ty);
    (">",  gt_ty);
-   (*("!=", Type.fun_ty [Type.int_ty; Type.int_ty] Type.bool_ty);*)
 
    ("false", Type.bool_ty);
    ("true", Type.bool_ty);

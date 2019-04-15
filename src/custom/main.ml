@@ -24,9 +24,12 @@ let run_check (ty_env, mut_env, val_env) ast =
   incr total_tests;
   let success = match ast with
   | Ast.CheckExpect (l, ast1, ast2) ->
-    let (_, _, _, _, value1) = run_ty_val (ty_env, mut_env, val_env) ast1 in
-    let (_, _, _, _, value2) = run_ty_val (ty_env, mut_env, val_env) ast2 in
-    value1 = value2
+    let (_, _, _, _, v) =
+      run_ty_val
+        (ty_env, mut_env, val_env)
+        (Ast.Call (l, Ast.Name (l, "=="), [ast1; ast2]))
+    in
+    Value.truthy l v
 
   | Ast.CheckError (l, ast) ->
     let (_, _, _) = Type.typecheck ~level:!curr_level ty_env mut_env ast in

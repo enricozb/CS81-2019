@@ -130,14 +130,8 @@ let rec string_of_type ty =
 				name_ty_map_str ^ rest_ty_str
 
     | TyFold (Some (id, []), rec_ty) ->
-        if toplevel then
-          id ^ recurse (Lazy.force rec_ty)
-        else
           id
     | TyFold (Some (id, param_tys), rec_ty) ->
-        if toplevel then
-          id ^ "[" ^ (recurse_tys param_tys) ^ "]: " ^ recurse (Lazy.force rec_ty)
-        else
           id ^ "[" ^ (recurse_tys param_tys) ^ "]"
 
     | TyFold (None, ty) -> recurse (Lazy.force ty)
@@ -338,8 +332,11 @@ let rec unify loc ty1 ty2 =
       TyFold (Some (id2, param_tys2), rec_ty2) ->
           if id1 = id2 then
             unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
-          else
+          else begin try
             unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
+          with Error.MythError _ ->
+            Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
+          end
 
     | TyFold (_, ty1), TyFold (_, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)

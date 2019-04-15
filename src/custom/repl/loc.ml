@@ -7,6 +7,12 @@ type loc =
     end_line   : int;
     end_char   : int }
 
+let fake_loc = {filename = "none";
+                start_line = -1;
+                start_char = -1;
+                end_line   = -1;
+                end_char   = -1 }
+
 let string_of_loc l =
   "file: " ^
   (if l.filename = ""

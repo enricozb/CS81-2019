@@ -27,3 +27,6 @@ val get_loc : string -> Lexing.position -> string -> loc
  * if the first loc doesn't come strictly before the second. *)
 val span : loc -> loc -> loc
 
+(* TODO: this should not exist *)
+val fake_loc : loc
+
