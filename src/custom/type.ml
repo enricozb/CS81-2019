@@ -19,6 +19,12 @@ and tyvar =
 
 and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
+type envs = {
+  ty_env : ty Env.env;
+  mut_env : bool Env.env;
+  val_env : Value.env_value Env.env;
+}
+
 let rec real_ty = function
   | TyVar {contents = Link ty} -> real_ty ty
   | ty -> ty
@@ -283,7 +289,7 @@ let rec unify loc ty1 ty2 =
   else
     match (ty1, ty2) with
     | TyCon (name1, ty_params1), TyCon (name2, ty_params2) ->
-        if name1 = name2 then
+        if name1 = name2 && List.length ty_params1 = List.length ty_params2 then
           List.iter2 unify ty_params1 ty_params2
         else
           Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
@@ -535,21 +541,27 @@ type suite_props =
       flow_stmts : bool;
     }
 
-let rec typecheck ?level:(level=1) ty_env mut_env ast =
-  let ty = infer level ty_env mut_env ast in
+let rec typecheck ?level:(level=1) envs ast =
+  let ty = infer level envs ast in
 
   match ast with
     | Ast.Bind (l, mut, id, _) ->
-        (Env.bind id ty ty_env, Env.bind id mut mut_env, ty)
+        ({envs with
+          ty_env = Env.bind id ty envs.ty_env;
+          mut_env = Env.bind id mut envs.mut_env;
+        }, ty)
 
     | Ast.Def (l, id, _, _) ->
-        (Env.bind id ty ty_env, Env.bind id false mut_env, ty)
+        ({envs with
+          ty_env = Env.bind id ty envs.ty_env;
+          mut_env = Env.bind id false envs.mut_env;
+        }, ty)
 
     | _ ->
-        (ty_env, mut_env, ty)
+        (envs, ty)
 
-and infer level ty_env mut_env ast = match ast with
-  | Ast.Name (l, id) -> instantiate level (Env.lookup l id ty_env)
+and infer level envs ast = match ast with
+  | Ast.Name (l, id) -> instantiate level (Env.lookup l id envs.ty_env)
 
   | Ast.Num (l, i) -> prim_int_ty
 
@@ -557,7 +569,7 @@ and infer level ty_env mut_env ast = match ast with
 
   | Ast.List (l, asts) ->
       let elem_ty = fresh_tyvar level () in
-      let tys = List.map (infer level ty_env mut_env) asts in
+      let tys = List.map (infer level envs) asts in
       pairwise_unify l tys;
 
       (* unify elem_ty with the first element of the list (if there is one) *)
@@ -569,7 +581,7 @@ and infer level ty_env mut_env ast = match ast with
   | Ast.Record (l, name_ast_map) ->
       let name_ty_map =
 				Ast.NameMap.map
-          (infer level ty_env mut_env)
+          (infer level envs)
 					name_ast_map
 			in
       let name_ty_map =
@@ -589,19 +601,19 @@ and infer level ty_env mut_env ast = match ast with
 			let record_ty = TyFold (None, lazy (TyRecord
         (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
       in
-			unify l record_ty (infer level ty_env mut_env ast);
+			unify l record_ty (infer level envs ast);
 			field_ty
 
   | Ast.Lambda (l, param_names, ast) ->
       let param_tys = List.map (fresh_tyvar level) param_names in
-      let ty_env' = Env.bind_many param_names param_tys ty_env in
-      let ret_ty = infer level ty_env' mut_env ast in
+      let ty_env' = Env.bind_many param_names param_tys envs.ty_env in
+      let ret_ty = infer level {envs with ty_env = ty_env'} ast in
       fun_ty param_tys ret_ty
 
   | Ast.If (l, ast, suite1, suite2) ->
-      let test_ty = infer level ty_env mut_env ast in
-      let suite_props1 = typecheck_suite level ty_env mut_env suite1 in
-      let suite_props2 = typecheck_suite level ty_env mut_env suite2 in
+      let test_ty = infer level envs ast in
+      let suite_props1 = typecheck_suite level envs suite1 in
+      let suite_props2 = typecheck_suite level envs suite2 in
 
       if (suite_props1.ret_tys, suite_props2.ret_tys) <> ([], []) then
         Error.return_outside_def l;
@@ -613,8 +625,8 @@ and infer level ty_env mut_env ast = match ast with
       none_ty
 
   | Ast.While (l, ast, suite) ->
-      let test_ty = infer level ty_env mut_env ast in
-      let suite_props = typecheck_suite level ty_env mut_env suite in
+      let test_ty = infer level envs ast in
+      let suite_props = typecheck_suite level envs suite in
       if suite_props.ret_tys <> [] then
         Error.return_outside_def l;
 
@@ -622,8 +634,8 @@ and infer level ty_env mut_env ast = match ast with
       none_ty
 
   | Ast.Call (l, ast, param_asts) ->
-      let t1 = infer level ty_env mut_env ast in
-      let param_tys = List.map (infer level ty_env mut_env) param_asts in
+      let t1 = infer level envs ast in
+      let param_tys = List.map (infer level envs ) param_asts in
       let ret_ty = fresh_tyvar level () in
 
       (* equate type of function with (param_tys -> ret_ty) *)
@@ -631,7 +643,7 @@ and infer level ty_env mut_env ast = match ast with
       ret_ty
 
   | Ast.Bind (l, mut, id, ast) ->
-      let ty = infer (level + 1) ty_env mut_env ast in
+      let ty = infer (level + 1) envs ast in
 
       if mut || is_expansive ast then
         ty
@@ -642,11 +654,11 @@ and infer level ty_env mut_env ast = match ast with
       (* TODO: really not sure about this level ... Notice it is not +1 like
        * in Ast.Bind. Because I don't really think this is a let-in type
        * expression. *)
-      if not (Env.lookup l id mut_env) then
+      if not (Env.lookup l id envs.mut_env) then
         Error.bind_error l id;
 
-      let ast_ty = infer level ty_env mut_env ast in
-      unify l ast_ty (Env.lookup l id ty_env);
+      let ast_ty = infer level envs ast in
+      unify l ast_ty (Env.lookup l id envs.ty_env);
       ast_ty
 
   (* TODO : do a thorough check of whether or not the level logic is correct *)
@@ -654,7 +666,7 @@ and infer level ty_env mut_env ast = match ast with
       let functype = fresh_tyvar (level + 1) () in
       let param_tys = List.map (fresh_tyvar (level + 1)) params in
       let ty_env' =
-        Env.bind_many (name :: params) (functype :: param_tys) ty_env in
+        Env.bind_many (name :: params) (functype :: param_tys) envs.ty_env in
 
       (* none of the parameters, nor the function name is mutable
        * TODO: maybe make function parameters potentially mutable? *)
@@ -662,9 +674,11 @@ and infer level ty_env mut_env ast = match ast with
       let mut_env' =
         Env.bind_many
         (name :: params)
-        (List.init len (fun _ -> false)) mut_env in
+        (List.init len (fun _ -> false)) envs.mut_env in
 
-      let suite_props = typecheck_suite (level + 1) ty_env' mut_env' suite in
+      let envs' = {envs with ty_env = ty_env'; mut_env = mut_env'} in
+
+      let suite_props = typecheck_suite (level + 1) envs' suite in
 
       if suite_props.flow_stmts then
         Error.flow_outside_loop l;
@@ -695,15 +709,16 @@ and infer level ty_env mut_env ast = match ast with
   | _ -> failwith "Type.infer called on non-implemented Ast"
 
 (* TODO : potentially return the last ty_env if we want the modified scope *)
-and typecheck_suite level ty_env mut_env suite =
+and typecheck_suite level envs suite =
   let current_level = ref level in
-  let rec recurse ty_env mut_env suite_props suite =
+  let rec recurse envs suite_props suite =
     match suite with
     | [] -> suite_props
 
     | Ast.Return (l, ast) :: [] ->
-        let (_, _, ty) = typecheck ~level:!current_level ty_env mut_env ast in
+        let (_, ty) = typecheck ~level:!current_level envs ast in
         {suite_props with ret_tys = ty :: suite_props.ret_tys}
+
     | Ast.Return (l, _) :: rest ->
         Error.unreachable_code_error l "return"
 
@@ -717,29 +732,28 @@ and typecheck_suite level ty_env mut_env suite =
         Error.unreachable_code_error l "continue"
 
     | Ast.If (l, test, suite1, suite2) :: rest ->
-      let test_ty = infer level ty_env mut_env test in
-      let suite_props1 = typecheck_suite level ty_env mut_env suite1 in
-      let suite_props2 = typecheck_suite level ty_env mut_env suite2 in
+      let test_ty = infer level envs test in
+      let suite_props1 = typecheck_suite level envs suite1 in
+      let suite_props2 = typecheck_suite level envs suite2 in
 
       unify l test_ty bool_ty;
       recurse
-        ty_env
-        mut_env
+        envs
         {suite_props with ret_tys =
           suite_props.ret_tys @ suite_props1.ret_tys @ suite_props2.ret_tys}
         rest
 
     | (Ast.Bind _ as ast) :: suite
     | (Ast.Def _ as ast) :: suite ->
-        let (ty_env, mut_env, _) =
-          typecheck ~level:!current_level ty_env mut_env ast
+        let (envs, ty) =
+          typecheck ~level:!current_level envs ast
         in
         incr current_level;
-        recurse ty_env mut_env suite_props suite
+        recurse envs suite_props suite
 
     | ast :: asts ->
-        let (_, _, _) = typecheck ~level:!current_level ty_env mut_env ast in
-        recurse ty_env mut_env suite_props asts
+        let (envs, ty) = typecheck ~level:!current_level envs ast in
+        recurse envs suite_props asts
 
-  in recurse ty_env mut_env {ret_tys = []; flow_stmts = false} suite
+  in recurse envs {ret_tys = []; flow_stmts = false} suite
 

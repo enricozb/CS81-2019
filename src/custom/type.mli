@@ -18,6 +18,11 @@ and tyvar =
 
 and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
+type envs = {
+  ty_env : ty Env.env;
+  mut_env : bool Env.env;
+  val_env : Value.env_value Env.env;
+}
 
 val string_of_type : ty -> string
 
@@ -44,7 +49,6 @@ val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty
 
 
 val typecheck : ?level:level ->
-  ty Env.env -> bool Env.env ->  (* the type env, and the mut env *)
-  Ast.ast ->                     (* the ast to typecheck *)
-  ty Env.env * bool Env.env * ty (* returns type env, mut env, the ast type *)
+  envs -> Ast.ast ->             (* the ast to typecheck *)
+  envs * ty (* returns type env, mut env, the ast type *)
 
