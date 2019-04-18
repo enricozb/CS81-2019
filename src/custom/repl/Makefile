@@ -1,7 +1,3 @@
-#
-# Makefile for sexpr library.
-#
-
 default: repl.cma
 
 #

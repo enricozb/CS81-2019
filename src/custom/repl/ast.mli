@@ -2,6 +2,10 @@ type name = string
 
 module NameMap : Map.S with type key = name
 
+type ty =
+  | TyVar of Loc.loc * name
+  | TyCon of Loc.loc * name * (ty list)
+
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
@@ -9,7 +13,7 @@ type ast =
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name
-  | Lambda of (Loc.loc * (name list) * ast)
+  | Lambda of (Loc.loc * param_list * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
   | Assign of (Loc.loc * name * ast)
@@ -17,7 +21,7 @@ type ast =
   | While of (Loc.loc * ast * (ast list))
   | Break of Loc.loc
   | Continue of Loc.loc
-  | Def of (Loc.loc * name * (name list) * (ast list))
+  | Def of (Loc.loc * name * param_list * (ty option) * (ast list))
   | Return of (Loc.loc * ast)
   | Class of (Loc.loc * name * (ast list))
   | Suite of (Loc.loc * (ast list)) (* used only outside of parser *)
@@ -26,6 +30,8 @@ type ast =
   | CheckError of (Loc.loc * ast)
   | CheckType of (Loc.loc * ast)
   | CheckTypeError of (Loc.loc * ast)
+
+and param_list = (name * (ty option)) list
 
 val string_of_ast : ast -> string
 

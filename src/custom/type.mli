@@ -18,8 +18,19 @@ and tyvar =
 
 and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
+type kind =
+  | KindFun of kind_fun
+  | KindVar of ty
+
+and kind_fun = (ty list) -> ty
+
+val kind_fun_0 : ty -> kind_fun
+val kind_fun_1 : (ty -> ty) -> kind_fun
+(*val kind_fun_2 : (ty -> ty -> ty) -> kind_fun*)
+
 type envs = {
   ty_env : ty Env.env;
+  kind_env : kind Env.env;
   mut_env : bool Env.env;
   val_env : Value.env_value Env.env;
 }

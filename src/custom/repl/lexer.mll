@@ -74,7 +74,9 @@
 
   exception Exit
   exception Eof
-  exception SyntaxError of Loc.loc
+  exception SyntaxError of string * Loc.loc
+
+  let error msg loc = raise (SyntaxError (msg, loc))
 
   let line_number = ref 1
   let paren_count = ref 0
@@ -125,7 +127,7 @@
             incr dedent_count;
             ignore (Stack.pop space_stack);
         done;
-        raise (SyntaxError loc)
+        raise (SyntaxError ("Invalid DEDENT stack", loc))
       with Exit -> `Token (DEINDENT (loc, !dedent_count))
 
   let make_loc filename lexbuf =
@@ -207,7 +209,10 @@ rule token filename = parse
         else
           OPERATOR ((make_loc filename lexbuf), op)
   }
-  | _ { raise (SyntaxError (make_loc filename lexbuf)) }
+  | _ as t {
+    let msg = "Unexpected token '" ^ String.make 1 t ^ "'" in
+    raise (SyntaxError (msg, make_loc filename lexbuf))
+  }
   | eof { EOF }
 
 and make_string filename buffer = parse

@@ -17,6 +17,10 @@ module NameMap = Map.Make(
 		let compare = compare_names
 	end)
 
+type ty =
+  | TyVar of Loc.loc * name
+  | TyCon of Loc.loc * name * (ty list)
+
 type ast =
   | Name of Loc.loc * name
   | Num of Loc.loc * string
@@ -24,7 +28,7 @@ type ast =
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name
-  | Lambda of (Loc.loc * (name list) * ast)
+  | Lambda of (Loc.loc * param_list * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
   | Assign of (Loc.loc * name * ast)
@@ -32,15 +36,17 @@ type ast =
   | While of (Loc.loc * ast * (ast list))
   | Break of Loc.loc
   | Continue of Loc.loc
-  | Def of (Loc.loc * name * (name list) * (ast list))
+  | Def of (Loc.loc * name * param_list * (ty option) * (ast list))
   | Return of (Loc.loc * ast)
   | Class of (Loc.loc * name * (ast list))
-  | Suite of (Loc.loc * (ast list)) (* used only oustide of parser *)
+  | Suite of (Loc.loc * (ast list)) (* used only outside of parser *)
   | Import of (Loc.loc * name)
   | CheckExpect of (Loc.loc * ast * ast)
   | CheckError of (Loc.loc * ast)
   | CheckType of (Loc.loc * ast)
   | CheckTypeError of (Loc.loc * ast)
+
+and param_list = (name * (ty option)) list
 
 let rec string_of_str_list lst sep =
   let rec iter = function
@@ -83,6 +89,7 @@ and string_of_ast = function
       string_of_ast ast ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
 
   | Lambda (_, params, ast) ->
+      let params = List.map fst params in
       "(" ^ string_of_str_list params ", " ^ ") -> " ^ string_of_ast ast
 
   | If (_, expr, true_body, false_body) ->
@@ -103,7 +110,8 @@ and string_of_ast = function
   | Assign (_, name, expr) ->
       name ^ " = " ^ string_of_ast expr
 
-  | Def (_, funcname, params, stmts) ->
+  | Def (_, funcname, params, _, stmts) ->
+      let params = List.map fst params in
       "def " ^ funcname ^ "(" ^ string_of_str_list params ", " ^ "): ..."
 
   | Return (_, ast) ->
@@ -146,7 +154,7 @@ let loc_of_ast = function
   | Continue l
   | Assign (l, _, _)
   | Bind (l, _, _, _)
-  | Def (l, _, _, _)
+  | Def (l, _, _, _, _)
   | Return (l, _)
   | Class (l, _, _)
   | Suite (l, _)
@@ -186,11 +194,11 @@ let is_expr = function
 
 let rec class_split_suite = function
   | [] -> ([], [])
-  | (Def (_, _, "self" :: _, _) as def) :: rest ->
+  | (Def (_, _, ("self", _) :: _, _, _) as def) :: rest ->
       let instance_funcs, class_funcs = class_split_suite rest in
       (def :: instance_funcs, class_funcs)
 
-  | (Def (_, _, _, _) as def) :: rest ->
+  | (Def (_, _, _, _, _) as def) :: rest ->
       let instance_funcs, class_funcs = class_split_suite rest in
       (instance_funcs, def :: class_funcs)
   | _ -> failwith "Ast.class_split_suite contains non defs"

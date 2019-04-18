@@ -19,8 +19,33 @@ and tyvar =
 
 and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
+type kind =
+  | KindFun of kind_fun
+  | KindVar of ty
+
+and kind_fun = (ty list) -> ty
+
+let kind_fun_0 ty =
+  let kind_fun param_tys =
+    if param_tys <> [] then
+      failwith "Incorrect CON length"
+    else
+      ty
+  in
+  kind_fun
+
+let kind_fun_1 ty_fun =
+  let kind_fun param_tys =
+    if List.length param_tys <> 1 then
+      failwith "Incorrect CON length"
+    else
+      ty_fun (List.nth param_tys 0)
+  in
+  kind_fun
+
 type envs = {
   ty_env : ty Env.env;
+  kind_env : kind Env.env;
   mut_env : bool Env.env;
   val_env : Value.env_value Env.env;
 }
@@ -541,6 +566,57 @@ type suite_props =
       flow_stmts : bool;
     }
 
+let rec make_ty level kind_env ty =
+  match ty with
+  | None ->
+      (kind_env, fresh_tyvar (level + 1) ())
+
+  | Some (Ast.TyVar (l, id)) ->
+      begin match Env.get_opt id kind_env with
+        | None ->
+            let ty = fresh_tyvar (level + 1) () in
+            let kind_env = Env.bind id (KindVar ty) kind_env in
+            (kind_env, ty)
+
+        | Some (KindVar ty) ->
+            (kind_env, ty)
+
+        | Some (KindFun _) ->
+            Error.type_error l
+              "Type.make_ty: kind_env is malformed. Maps TyVar to KindFun"
+      end
+
+  | Some (Ast.TyCon (l, id, param_tys)) ->
+      let (kind_env, param_tys) =
+        make_tys level kind_env (List.map (fun x -> Some x) param_tys)
+      in
+
+      begin match Env.get_opt id kind_env with
+        | None ->
+            Error.type_not_found_error l id
+
+        | Some (KindFun ty_fun) ->
+            (kind_env, ty_fun param_tys)
+
+        | Some (KindVar _) ->
+            Error.type_error l
+              "Type.make_params: kind_env is malformed. Maps TyCon to KindVar"
+      end
+
+and make_tys level kind_env tys =
+  match tys with
+  | [] -> (kind_env, [])
+  | ty :: rest ->
+      let (kind_env, ty) = make_ty level kind_env ty in
+      let (kind_env, tys) = make_tys level kind_env rest in
+      (kind_env, ty :: tys)
+
+let make_params level kind_env params =
+  let (param_names, param_tys) = List.split params in
+  let (kind_env, param_tys) = make_tys level kind_env param_tys in
+  (kind_env, param_names, param_tys)
+
+
 let rec typecheck ?level:(level=1) envs ast =
   let ty = infer level envs ast in
 
@@ -551,7 +627,7 @@ let rec typecheck ?level:(level=1) envs ast =
           mut_env = Env.bind id mut envs.mut_env;
         }, ty)
 
-    | Ast.Def (l, id, _, _) ->
+    | Ast.Def (l, id, _, _, _) ->
         ({envs with
           ty_env = Env.bind id ty envs.ty_env;
           mut_env = Env.bind id false envs.mut_env;
@@ -604,8 +680,10 @@ and infer level envs ast = match ast with
 			unify l record_ty (infer level envs ast);
 			field_ty
 
-  | Ast.Lambda (l, param_names, ast) ->
-      let param_tys = List.map (fresh_tyvar level) param_names in
+  | Ast.Lambda (l, params, ast) ->
+      let (kind_env, param_names, param_tys) =
+        make_params level envs.kind_env params
+      in
       let ty_env' = Env.bind_many param_names param_tys envs.ty_env in
       let ret_ty = infer level {envs with ty_env = ty_env'} ast in
       fun_ty param_tys ret_ty
@@ -662,21 +740,31 @@ and infer level envs ast = match ast with
       ast_ty
 
   (* TODO : do a thorough check of whether or not the level logic is correct *)
-  | Ast.Def (l, name, params, suite) ->
+  | Ast.Def (l, name, params, ret_ty, suite) ->
       let functype = fresh_tyvar (level + 1) () in
-      let param_tys = List.map (fresh_tyvar (level + 1)) params in
+      let (kind_env', param_names, param_tys) =
+        make_params level envs.kind_env params
+      in
       let ty_env' =
-        Env.bind_many (name :: params) (functype :: param_tys) envs.ty_env in
+        Env.bind_many (name :: param_names) (functype :: param_tys) envs.ty_env
+      in
 
       (* none of the parameters, nor the function name is mutable
        * TODO: maybe make function parameters potentially mutable? *)
-      let len = List.length (name :: params) in
+      let len = List.length (name :: param_names) in
       let mut_env' =
         Env.bind_many
-        (name :: params)
-        (List.init len (fun _ -> false)) envs.mut_env in
+        (name :: param_names)
+        (List.init len (fun _ -> false)) envs.mut_env
+      in
 
-      let envs' = {envs with ty_env = ty_env'; mut_env = mut_env'} in
+      let envs' = {
+        envs with
+          ty_env = ty_env';
+          mut_env = mut_env';
+          kind_env = kind_env'
+      }
+      in
 
       let suite_props = typecheck_suite (level + 1) envs' suite in
 
@@ -688,11 +776,14 @@ and infer level envs ast = match ast with
       else
         pairwise_unify l (none_ty :: suite_props.ret_tys);
 
+      let (envs, ret_ty_provided) = make_ty level envs'.kind_env ret_ty in
+
       let ret_ty = match suite_props.ret_tys with
         | [] -> none_ty
         | ret_ty :: _ -> ret_ty
       in
 
+      unify l ret_ty_provided ret_ty;
       unify l functype (fun_ty param_tys ret_ty);
 
       generalize level functype

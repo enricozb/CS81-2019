@@ -626,7 +626,19 @@ let ty_env = Env.bind_pairs
    ("List", list_class_ty);
   ] Env.empty
 
-let envs = Type.({ty_env = ty_env; mut_env = mut_env; val_env = val_env})
+let kind_env = Env.bind_pairs
+  [
+    ("Int", Type.KindFun (Type.kind_fun_0 int_ty));
+    ("String", Type.KindFun (Type.kind_fun_0 string_ty));
+    ("List", Type.KindFun (Type.kind_fun_1 list_of_ty));
+  ] Env.empty
+
+let envs = Type.({
+  ty_env = ty_env;
+  mut_env = mut_env;
+  val_env = val_env;
+  kind_env = kind_env
+})
 
 let basis = "
 def repr(x):

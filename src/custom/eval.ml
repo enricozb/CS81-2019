@@ -48,6 +48,7 @@ and reduce_ast val_env frames = function
       (Ast ast, val_env, Frame.Field (l, field) :: frames)
 
   | Ast.Lambda (l, params, body_ast) ->
+      let params = List.map fst params in
       let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
       let func_obj = Object.callable_object (lazy lambda) in
       (Value func_obj, val_env, frames)
@@ -61,7 +62,8 @@ and reduce_ast val_env frames = function
   | Ast.Assign (l, name, ast) ->
       (Ast ast, val_env, Frame.Assign (l, name) :: frames)
 
-  | Ast.Def (l, name, params, suite) ->
+  | Ast.Def (l, name, params, _, suite) ->
+      let params = List.map fst params in
       let rec closure () = Env.bind name (func_obj ()) val_env
       and func_obj = fun () ->
         let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in

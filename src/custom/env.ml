@@ -10,6 +10,7 @@ let dom env =
 
 let mem id env = StringMap.mem id env
 let get id env = StringMap.find id env
+let get_opt id env = StringMap.find_opt id env
 let lookup l id env =
   try
     StringMap.find id env

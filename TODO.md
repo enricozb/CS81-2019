@@ -4,6 +4,7 @@
 - Lexer tokens should be records so I don't have to keep doing `snd $1`
   and stuff. It should be `$1.l` or `$1.v`, much more readable.
 - Clean up the stupid stuff at the bottom of lexer.mll
+- Remove `_error` suffixes in `Error` module.
 - Add tuples
 - Add GADTs
 - Relax the value restriction according to

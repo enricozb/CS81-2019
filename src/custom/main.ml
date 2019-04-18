@@ -128,8 +128,8 @@ let rec repl_func ast_or_error envs =
     match ast_or_error with
     | `Ast ast ->
         run envs ast
-    | `ParsingError loc ->
-        Error.syntax_error loc ""
+    | `ParsingError (msg, loc) ->
+        Error.syntax_error loc msg
   with
     Error.MythError (l, e) ->
       Error.print_error l e;

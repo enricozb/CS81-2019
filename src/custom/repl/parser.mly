@@ -101,6 +101,13 @@
       in
       to_ast ops asts assocs
 
+  let starts_with_upper s =
+    let c = s.[0] in
+    c = Char.uppercase_ascii c
+
+  let starts_with_lower s =
+    let c = s.[0] in
+    c = Char.lowercase_ascii c
 %}
 
 %token <Loc.loc * string> NAME
@@ -181,11 +188,17 @@ check_stmt:
 
 assign_stmt:
   | LET MUT NAME EQUALS expr {
-    Ast.Bind (Loc.span $1 (Ast.loc_of_ast $5), true, snd $3, $5)
+    if not (starts_with_lower (snd $3)) then
+      failwith "Variables must start with a lower-case letter"
+    else
+      Ast.Bind (Loc.span $1 (Ast.loc_of_ast $5), true, snd $3, $5)
   }
 
   | LET NAME EQUALS expr {
-    Ast.Bind (Loc.span $1 (Ast.loc_of_ast $4), false, snd $2, $4)
+    if not (starts_with_lower (snd $2)) then
+      failwith "Variables must start with a lower-case letter"
+    else
+      Ast.Bind (Loc.span $1 (Ast.loc_of_ast $4), false, snd $2, $4)
   }
 
   | NAME EQUALS expr {
@@ -245,15 +258,25 @@ while_stmt:
   }
 
 funcdef:
-  | DEF NAME name_list COLON suite {
-    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $5),
-             snd $2, snd $3, $5)
+  | DEF NAME name_list ret_ty COLON suite {
+    if not (starts_with_lower (snd $2)) then
+      failwith "Functions must start with a lower-case letter"
+    else
+      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $6),
+               snd $2, snd $3, $4, $6)
   }
+
+ret_ty:
+  | { None }
+  | MAPSTO ty { Some $2 }
 
 classdef:
   | CLASS NAME COLON suite {
-    let l = Loc.span $1 (Ast.loc_of_ast_list $4) in
-    Ast.Class (l, snd $2, $4)
+    if not (starts_with_upper (snd $2)) then
+      failwith "Class names must be capitalized"
+    else
+      let l = Loc.span $1 (Ast.loc_of_ast_list $4) in
+      Ast.Class (l, snd $2, $4)
   }
 
 name_list:
@@ -261,8 +284,36 @@ name_list:
   | LPAREN name_list_inner RPAREN        { (Loc.span $1 $3, $2) }
 
 name_list_inner:
-  | NAME                 { [snd $1] }
-  | NAME COMMA name_list_inner { (snd $1) :: $3 }
+  | NAME                                { [(snd $1, None)] }
+  | NAME COLON ty                       { [(snd $1, Some $3)] }
+  | NAME COMMA name_list_inner          { (snd $1, None) :: $3 }
+  | NAME COLON ty COMMA name_list_inner { (snd $1, Some $3) :: $5 }
+
+ty:
+  | NAME {
+    let name = (snd $1) in
+    if starts_with_upper name then
+      Ast.TyCon (fst $1, name, [])
+    else
+      Ast.TyVar (fst $1, name)
+  }
+
+  | NAME ty_list {
+    let name = (snd $1) in
+    if starts_with_lower name then
+      failwith "Type variables must have kind *"
+    else
+      let loc = Loc.span (fst $1) (fst $2) in
+      Ast.TyCon (loc, name, snd $2)
+  }
+
+ty_list:
+  | LBRACK RBRACK               { (Loc.span $1 $2, []) }
+  | LBRACK ty_list_inner RBRACK { (Loc.span $1 $3, $2) }
+
+ty_list_inner:
+  | ty                     { [$1] }
+  | ty COMMA ty_list_inner { $1 :: $3 }
 
 expr:
   | non_op_expr                 { $1 }

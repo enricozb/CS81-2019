@@ -16,7 +16,6 @@ val bind_error : Loc.loc -> string -> 'a
 val type_error : Loc.loc -> string -> 'a
 val syntax_error : Loc.loc -> string -> 'a
 
-
 val type_mismatch_error : Loc.loc ->
                           expected: string ->
                           provided: string -> 'a
@@ -28,7 +27,7 @@ val call_len_error : Loc.loc ->
                      provided : int -> 'a
 val call_error : Loc.loc -> string -> 'a
 val call_field_error : Loc.loc -> string -> 'a
-
+val type_not_found_error : Loc.loc -> string -> 'a
 
 val unreachable_code_error : Loc.loc -> string -> 'a
 val return_outside_def : Loc.loc -> 'a

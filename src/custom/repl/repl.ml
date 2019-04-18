@@ -14,7 +14,7 @@ let print_wrap lexfun =
 
 (* Taken from https://gitlab.inria.fr/fpottier/menhir/blob/master/demos/calc-incremental/calc.ml *)
 exception ParseIncomplete
-exception ParsingError of Loc.loc
+exception ParsingError of string * Loc.loc
 
 let rec loop
         lexer_rule
@@ -39,7 +39,7 @@ let rec loop
       loop lexer_rule lexbuf checkpoint
   | I.HandlingError _env ->
       let loc = Loc.get_loc "__repl__" (lexeme_start_p lexbuf) (lexeme lexbuf) in
-      raise (ParsingError loc)
+      raise (ParsingError ("Unknown Error", loc))
   | I.Accepted ast ->
       ast
   | I.Rejected ->
@@ -67,15 +67,14 @@ let parse_repl () =
         lexbuf
         (Parser.Incremental.single_input lexbuf.lex_curr_p)
     with
-      | ParseIncomplete -> begin
+      | ParseIncomplete ->
         if String.trim str = "" then
           loop_until_parse (read_line_with_prompt ">>> ")
         else
           loop_until_parse (str ^ (read_line_with_prompt "... "))
-      end
-      | Lexer.SyntaxError loc ->
-        let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
-        raise (ParsingError loc)
+      | Lexer.SyntaxError (msg, loc) ->
+        (*let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in*)
+        raise (ParsingError (msg, loc))
   in begin
     loop_until_parse (read_line_with_prompt ">>> ")
   end
@@ -86,9 +85,9 @@ let parse_file (filename : string) =
     try
       Parser.file_input (Lexer.token_cache filename) lexbuf
       (*Parser.file_input (print_wrap @@ Lexer.token_cache filename) lexbuf*)
-    with _ ->
-      let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
-      raise (ParsingError loc)
+    with Lexer.SyntaxError (msg, loc) ->
+      (*let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in*)
+      raise (ParsingError (msg, loc))
 
 let parse_string (filename : string) str =
   Lexer.reset_state FILE;
@@ -96,9 +95,9 @@ let parse_string (filename : string) str =
     try
       Parser.file_input (Lexer.token_cache filename) lexbuf
       (*Parser.file_input (print_wrap @@ Lexer.token_cache filename) lexbuf*)
-    with _ ->
-      let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in
-      raise (ParsingError loc)
+    with Lexer.SyntaxError (msg, loc) ->
+      (*let loc = Loc.get_loc filename (lexeme_start_p lexbuf) (lexeme lexbuf) in*)
+      raise (ParsingError (msg, loc))
 
 (* takes in a function that takes in the (`Ast || `ParsingError) read in and
  * any auxilliary data. Feeds in `aux` into f repeatedly after each parsing. *)
@@ -108,8 +107,8 @@ let repl f (aux : 'a) =
     try
         aux := f (`Ast (parse_repl ())) (!aux)
     with
-    | ParsingError loc ->
-        aux := f (`ParsingError loc) (!aux)
+    | ParsingError (msg, loc) ->
+        aux := f (`ParsingError (msg, loc)) (!aux)
     | End_of_file ->
         exit 0
   done
