@@ -3,7 +3,7 @@ type value =
   | Bool of bool
   | Int of Z.t
   | String of string
-  | List of value list
+  | List of value Batteries.DynArray.t
   | Object of name_value_map
   | Lambda of lambda * closure
   | Builtin of primop

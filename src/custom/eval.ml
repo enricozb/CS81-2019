@@ -1,3 +1,5 @@
+module DynArray = Batteries.DynArray
+
 type item =
   | Ast of Ast.ast
   | Value of Value.value
@@ -30,7 +32,8 @@ and reduce_ast val_env frames = function
   | Ast.Num (l, i) -> (Value (Value.Int (Z.of_string i)), val_env, frames)
   | Ast.String (l, s) -> (Value (Value.String s), val_env, frames)
 
-  | Ast.List (l, []) -> (Value (Value.List []), val_env, frames)
+  | Ast.List (l, []) ->
+      (Value (Value.List (DynArray.create ())), val_env, frames)
   | Ast.List (l, ast :: asts) ->
       (Ast ast, val_env, Frame.List (l, [], asts) :: frames)
 
@@ -61,6 +64,9 @@ and reduce_ast val_env frames = function
 
   | Ast.Assign (l, name, ast) ->
       (Ast ast, val_env, Frame.Assign (l, name) :: frames)
+
+  | Ast.SetField (l, ast1, field, ast2) ->
+      (Ast ast1, val_env, Frame.SetField (l, None, field, Some ast2) :: frames)
 
   | Ast.Def (l, name, params, _, suite) ->
       let params = List.map fst params in
@@ -131,7 +137,7 @@ and eval_val val_env frames value =
 
   | Frame.List (l, values_so_far, []) :: frames ->
       let values = List.rev (value :: values_so_far) in
-      (Value (Value.List values), val_env, frames)
+      (Value (Value.List (DynArray.of_list values)), val_env, frames)
   | Frame.List (l, values_so_far, ast :: asts) :: frames ->
       (Ast ast, val_env, (Frame.List (l, value :: values_so_far, asts) :: frames))
 
@@ -152,6 +158,18 @@ and eval_val val_env frames value =
   | Frame.Field (l, field) :: frames ->
       let value = Object.get_object_field value field in
       (Value value, val_env, frames)
+
+  | Frame.SetField (l, None, field, None) :: frames ->
+      failwith "Eval.eval_val: Frame.SetField has both options set to None"
+  | Frame.SetField (l, Some _, field, Some _) :: frames ->
+      failwith "Eval.eval_val: Frame.SetField has both options set to Some _"
+  | Frame.SetField (l, None, field, Some ast2) :: frames ->
+      (Ast ast2,
+       val_env,
+       Frame.SetField (l, Some value, field, None) :: frames)
+  | Frame.SetField (l, Some obj, field, None) :: frames ->
+      Object.set_object_field obj field (lazy value);
+      (Value Value.None, val_env, frames)
 
   | Frame.If (l, suite1, suite2) :: frames ->
       if Value.truthy l value then

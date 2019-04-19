@@ -158,11 +158,36 @@ stmt:
   | compound_stmt           { $1 }
 
 simple_stmt:
-  | expr NEWLINE            { $1 }
-  | check_stmt NEWLINE      { $1 }
-  | assign_stmt NEWLINE     { $1 }
-  | import_stmt NEWLINE     { $1 }
-  | flow_stmt NEWLINE       { $1 }
+  | check_stmt NEWLINE       { $1 }
+  | bind_stmt NEWLINE        { $1 }
+  | import_stmt NEWLINE      { $1 }
+  | flow_stmt NEWLINE        { $1 }
+  | expr NEWLINE             { $1 }
+  | expr EQUALS expr NEWLINE {
+    match $1 with
+    | Ast.Name (l, name) ->
+        Ast.Assign (l, name, $3)
+    | Ast.Field (l, ast, name) ->
+        Ast.SetField (l, ast, name, $3)
+    | Ast.Call (l1, Ast.Field (l2, ast, "__getitem__"), [idx]) ->
+        Ast.Call (l1, Ast.Field (l2, ast, "__setitem__"), [idx; $3])
+    | _ ->
+        failwith "Incorrect assignment"
+  }
+  | expr ASSIGNOPERATOR expr NEWLINE {
+    let op_loc, op = $2 in
+    let expr = Ast.Call (op_loc, Ast.Name (op_loc, op), [$1; $3]) in
+
+    match $1 with
+    | Ast.Name (l, name) ->
+        Ast.Assign (l, name, expr)
+    | Ast.Field (l, ast, name) ->
+        Ast.SetField (l, ast, name, expr)
+    | Ast.Call (l1, Ast.Field (l2, ast, "__getitem__"), [idx]) ->
+        Ast.Call (l1, Ast.Field (l2, ast, "__setitem__"), [idx; expr])
+    | _ ->
+        failwith "Incorrect assignment"
+  }
 
 suite:
   | simple_stmt                     { [$1] }
@@ -186,7 +211,7 @@ check_stmt:
     Ast.CheckTypeError (Loc.span $1 (Ast.loc_of_ast $2), $2)
   }
 
-assign_stmt:
+bind_stmt:
   | LET MUT NAME EQUALS expr {
     if not (starts_with_lower (snd $3)) then
       failwith "Variables must start with a lower-case letter"
@@ -199,19 +224,6 @@ assign_stmt:
       failwith "Variables must start with a lower-case letter"
     else
       Ast.Bind (Loc.span $1 (Ast.loc_of_ast $4), false, snd $2, $4)
-  }
-
-  | NAME EQUALS expr {
-    Ast.Assign (Loc.span (fst $1) (Ast.loc_of_ast $3), snd $1, $3)
-  }
-
-  | NAME ASSIGNOPERATOR expr {
-    let loc_name, name = $1 in
-    let loc_op, op = $2 in
-    Ast.Assign (Loc.span loc_name (Ast.loc_of_ast $3),
-              name,
-              Ast.Call (loc_op, Ast.Name (loc_op, op),
-                        [Ast.Name (loc_name, name); $3]))
   }
 
 import_stmt:

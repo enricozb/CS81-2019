@@ -1,9 +1,11 @@
+module DynArray = Batteries.DynArray
+
 type value =
   | None
   | Bool of bool
   | Int of Z.t
   | String of string
-  | List of value list
+  | List of value DynArray.t
   | Object of name_value_map
   | Lambda of lambda * closure
   | Builtin of primop
@@ -23,7 +25,7 @@ let rec string_of_value = function
   | Bool b -> string_of_bool b
   | Int i -> Z.to_string i
   | String s -> "\"" ^ s ^ "\""
-  | List values -> "[" ^ string_of_list values ^ "]"
+  | List values -> "[" ^ string_of_list (DynArray.to_list values) ^ "]"
   | Object field_value_map ->
       let obj_str =
         String.concat ", " @@

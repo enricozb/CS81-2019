@@ -1,3 +1,5 @@
+module DynArray = Batteries.DynArray
+
 let call_prim_func f values =
   match f with
   | Value.Builtin primop -> primop values Loc.fake_loc
@@ -41,6 +43,30 @@ let binary_fun ty1 ty2 f = Object.callable_object (lazy (
         Error.call_len_error loc
           ~fun_ty: "builitn"
           ~expected: 2
+          ~provided: (List.length vals)
+  )
+))
+
+let ternary_fun ty1 ty2 ty3 f = Object.callable_object (lazy (
+  Value.Builtin (fun vals loc ->
+    match vals with
+    | [value1; value2; value3] ->
+      begin try
+        f value1 value2 value3
+      with Match_failure e ->
+        Error.type_mismatch_error loc
+          ~expected: ("{" ^ Type.string_of_type ty1 ^ ", " ^
+                            Type.string_of_type ty2 ^ ", " ^
+                            Type.string_of_type ty3 ^ "}")
+          ~provided: ("{" ^ Value.string_of_value value1 ^ ", " ^
+                            Value.string_of_value value2 ^ ", " ^
+                            Value.string_of_value value3 ^ "}")
+      end
+
+    | _ ->
+        Error.call_len_error loc
+          ~fun_ty: "builitn"
+          ~expected: 3
           ~provided: (List.length vals)
   )
 ))
@@ -160,6 +186,7 @@ and list_of_ty ty =
 
      ("__len__", Type.fun_ty [] int_ty);
      ("__getitem__", Type.fun_ty [int_ty] ty);
+     ("__setitem__", Type.fun_ty [int_ty; ty] Type.none_ty);
      ("__repr__", Type.fun_ty [] string_ty);
     ])
   and list_of_ty ty = Type.TyFold (Some ("List", [ty]), inner_record)
@@ -432,15 +459,19 @@ let list_class_ty =
      ("__add__", Type.fun_ty [list_ty; list_ty] list_ty);
      ("__len__", Type.fun_ty [list_ty] int_ty);
      ("__getitem__", Type.fun_ty [list_ty; int_ty] Type.gen_var_ty);
+     ("__setitem__", Type.fun_ty [list_ty; int_ty; Type.gen_var_ty] Type.none_ty);
      ("__repr__", Type.fun_ty [list_ty] string_ty);
     ]
 
 let list_class =
   let rec list_uninitialized_object () =
-    let obj = Object.build_object [("val", lazy (Value.List []))] in
+    let obj =
+      Object.build_object [("val", lazy (Value.List (DynArray.create ())))]
+    in
     instance_def obj "__add__" list_add;
     instance_def obj "__len__" list_len;
     instance_def obj "__getitem__" list_getitem;
+    instance_def obj "__setitem__" list_setitem;
     instance_def obj "__repr__" list_repr;
     obj
   and list_op f =
@@ -488,10 +519,16 @@ let list_class =
         | _ -> failwith "Runtime type error"
       )
   )
-  and list_add = lazy (list_op ( @ ))
+  and list_add = lazy (list_op
+    (fun a b ->
+      let a = DynArray.copy a in
+      DynArray.append b a;
+      a
+    )
+  )
   and list_len = lazy (
     list_unary
-      (fun l -> !Object.make_int (Z.of_int (List.length l)))
+      (fun l -> !Object.make_int (Z.of_int (DynArray.length l)))
   )
   and list_getitem = lazy (
     binary_fun
@@ -501,7 +538,21 @@ let list_class =
         let other_v = Object.get_object_field b "val" in
         match self_v, other_v with
         | (Value.List x, Value.Int y) ->
-            List.nth x (Z.to_int y)
+            DynArray.get x (Z.to_int y)
+        | _ -> failwith "Runtime type error"
+
+      )
+  )
+  and list_setitem = lazy (
+    ternary_fun
+      list_ty int_ty Type.gen_var_ty
+      (fun a b c ->
+        let self_v = Object.get_object_field a "val" in
+        let other_v = Object.get_object_field b "val" in
+        match self_v, other_v with
+        | (Value.List x, Value.Int y) ->
+            DynArray.set x (Z.to_int y) c;
+            Value.None
         | _ -> failwith "Runtime type error"
 
       )
@@ -513,7 +564,7 @@ let list_class =
   in
   Object.make_list := (fun l ->
     let obj = list_uninitialized_object () in
-    Object.set_object_field obj "val" (lazy (Value.List l));
+    Object.set_object_field obj "val" (lazy (Value.List (DynArray.of_list l)));
     obj
   );
   Object.build_object
@@ -521,6 +572,7 @@ let list_class =
      ("__add__", list_add);
      ("__len__", list_len);
      ("__getitem__", list_getitem);
+     ("__setitem__", list_setitem);
      ("__repr__", list_repr);
     ]
 (* --------------------------- Common Functions --------------------------- *)

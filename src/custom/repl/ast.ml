@@ -28,6 +28,7 @@ type ast =
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name
+  | SetField of Loc.loc * ast * name * ast
   | Lambda of (Loc.loc * param_list * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
@@ -84,6 +85,9 @@ and string_of_ast = function
 
   | Field (_, ast, name) ->
       "(" ^ (string_of_ast ast) ^ ")." ^ name
+
+  | SetField (_, ast1, name, ast2) ->
+      (string_of_ast ast1) ^ "." ^ name ^ " = " ^ (string_of_ast ast2)
 
   | Call (_, ast, params) ->
       string_of_ast ast ^ "(" ^ (string_of_ast_list params ", ") ^ ")"
@@ -146,6 +150,7 @@ let loc_of_ast = function
   | List (l, _)
   | Record (l, _)
   | Field (l, _, _)
+  | SetField (l, _, _, _)
   | Call (l, _, _)
   | Lambda (l, _, _)
   | If (l, _, _, _)
@@ -180,6 +185,7 @@ let is_expr = function
   | Break _
   | Continue _
   | Assign _
+  | SetField _
   | Bind _
   | Def _
   | Return _

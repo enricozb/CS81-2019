@@ -739,6 +739,20 @@ and infer level envs ast = match ast with
       unify l ast_ty (Env.lookup l id envs.ty_env);
       ast_ty
 
+  | Ast.SetField (l, ast1, name, ast2) ->
+      let rest_ty = fresh_tyvar level () in
+			let field_ty = fresh_tyvar level () in
+			let record_ty = TyFold (None, lazy (TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
+      in
+      let ast1_ty = infer level envs ast1 in
+      let ast2_ty = infer level envs ast2 in
+
+			unify l record_ty ast1_ty;
+      unify l field_ty ast2_ty;
+
+      ast2_ty
+
   (* TODO : do a thorough check of whether or not the level logic is correct *)
   | Ast.Def (l, name, params, ret_ty, suite) ->
       let functype = fresh_tyvar (level + 1) () in

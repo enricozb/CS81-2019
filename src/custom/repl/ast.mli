@@ -13,6 +13,7 @@ type ast =
   | List of Loc.loc * (ast list)
   | Record of Loc.loc * (ast NameMap.t)
   | Field of Loc.loc * ast * name
+  | SetField of Loc.loc * ast * name * ast
   | Lambda of (Loc.loc * param_list * ast)
   | Call of (Loc.loc * ast * (ast list))
   | Bind of (Loc.loc * bool * name * ast)
