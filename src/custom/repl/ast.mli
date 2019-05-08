@@ -22,7 +22,7 @@ type ast =
   | While of (Loc.loc * ast * (ast list))
   | Break of Loc.loc
   | Continue of Loc.loc
-  | Def of (Loc.loc * name * param_list * (ty option) * (ast list))
+  | Def of (Loc.loc * name * trait_bounds * param_list * (ty option) * (ast list))
   | Return of (Loc.loc * ast)
   | Class of (Loc.loc * name * (ast list))
   | Suite of (Loc.loc * (ast list)) (* used only outside of parser *)
@@ -33,6 +33,7 @@ type ast =
   | CheckTypeError of (Loc.loc * ast)
 
 and param_list = (name * (ty option)) list
+and trait_bounds = (ty * ty) list (* <a: Showable, b: Iterable[a]> *)
 
 val string_of_ast : ast -> string
 

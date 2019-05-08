@@ -194,20 +194,23 @@ rule token filename = parse
     RBRACE (make_loc filename lexbuf)
   }
   | "!=" | operators+ as op {
+    let loc = make_loc filename lexbuf in
     match op with
     (* These are to prevent <= and >= from becoming assignment operators *)
-    | "!=" -> OPERATOR ((make_loc filename lexbuf), op)
-    | "<=" -> OPERATOR ((make_loc filename lexbuf), op)
-    | ">=" -> OPERATOR ((make_loc filename lexbuf), op)
-    | "==" -> OPERATOR ((make_loc filename lexbuf), op)
-    | "=" -> EQUALS (make_loc filename lexbuf)
-    | "->" -> MAPSTO (make_loc filename lexbuf)
+    | "<" -> LANGLE loc
+    | ">" -> RANGLE loc
+    | "!=" -> OPERATOR (loc, op)
+    | "<=" -> OPERATOR (loc, op)
+    | ">=" -> OPERATOR (loc, op)
+    | "==" -> OPERATOR (loc, op)
+    | "=" -> EQUALS loc
+    | "->" -> MAPSTO loc
     | op ->
         if String.get op (String.length op - 1) = '=' then
-          ASSIGNOPERATOR ((make_loc filename lexbuf),
+          ASSIGNOPERATOR (loc,
             String.sub op 0 (String.length op - 1))
         else
-          OPERATOR ((make_loc filename lexbuf), op)
+          OPERATOR (loc, op)
   }
   | _ as t {
     let msg = "Unexpected token '" ^ String.make 1 t ^ "'" in

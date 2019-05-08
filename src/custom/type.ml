@@ -9,7 +9,12 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
+
+  (* TyFold is for recursive types. The (id * (ty list)) portion is meant to *)
+  (* be identical to TyCon. TyFold, if the first part of the tuple is not
+   * None, is a TyCon with a TyRecord backing it. If the ty-con portion of
+   * TyFold is None, then it's jus*)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t)
   | TyUnfold of ty
 
 and tyvar =
@@ -156,7 +161,7 @@ let rec string_of_type ty =
 				let rest_ty_str = match real_ty rest_ty with
 					| TyRowEmpty -> ""
 					| TyRowExtend _ -> assert false
-					| ty -> " | " ^ recurse ty
+					| ty -> " ..."
 				in
 				name_ty_map_str ^ rest_ty_str
 
@@ -295,8 +300,8 @@ let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
     )
   )))
 
-let has_field_ty ?(level=0) ?(generic=false) field ty =
-  TyFold (None, lazy (TyRecord (
+let has_field_ty ?(level=0) ?(generic=false) ?(tycon=None) field ty =
+  TyFold (tycon, lazy (TyRecord (
     TyRowExtend (
       Ast.NameMap.singleton field ty,
       if generic then
@@ -358,16 +363,12 @@ let rec unify loc ty1 ty2 =
     | ty2, TyUnfold (TyFold (_, ty1)) ->
         unify (Lazy.force ty1) ty2
 
-    (* TODO: is this the right way to check the names? *)
+    (* TyFolds are TyCon's with objcts underlying the type names. So, we
+     * check them just like type cons, if they are named. Otherwise, they
+     * just describe plain objects. *)
     | TyFold (Some (id1, param_tys1), rec_ty1),
       TyFold (Some (id2, param_tys2), rec_ty2) ->
-          if id1 = id2 then
-            unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
-          else begin try
-            unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
-          with Error.MythError _ ->
-            Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
-          end
+          unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
 
     | TyFold (_, ty1), TyFold (_, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)
@@ -508,15 +509,15 @@ let rec instantiate level ty =
 		| TyRowExtend (name_ty_map, rest_ty) ->
 				TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
 
-  | TyFold (None, ty) ->
-      TyFold (None, lazy (recurse (Lazy.force ty)))
-  | TyFold (Some (id, param_tys), ty) ->
-      TyFold (Some (id, List.map recurse param_tys),
-              lazy (recurse (Lazy.force ty)))
+    | TyFold (None, ty) ->
+        TyFold (None, lazy (recurse (Lazy.force ty)))
+    | TyFold (Some (id, param_tys), ty) ->
+        TyFold (Some (id, List.map recurse param_tys),
+                lazy (recurse (Lazy.force ty)))
 
 
-  | TyUnfold _ ->
-      failwith "Type.instantiate on TyUnfold"
+    | TyUnfold _ ->
+        failwith "Type.instantiate on TyUnfold"
   in
   recurse ty
 
@@ -627,7 +628,7 @@ let rec typecheck ?level:(level=1) envs ast =
           mut_env = Env.bind id mut envs.mut_env;
         }, ty)
 
-    | Ast.Def (l, id, _, _, _) ->
+    | Ast.Def (l, id, _, _, _, _) ->
         ({envs with
           ty_env = Env.bind id ty envs.ty_env;
           mut_env = Env.bind id false envs.mut_env;
@@ -754,7 +755,8 @@ and infer level envs ast = match ast with
       ast2_ty
 
   (* TODO : do a thorough check of whether or not the level logic is correct *)
-  | Ast.Def (l, name, params, ret_ty, suite) ->
+  | Ast.Def (l, name, traits, params, ret_ty, suite) ->
+      (* TODO: check for duplicates in traits *)
       let functype = fresh_tyvar (level + 1) () in
       let (kind_env', param_names, param_tys) =
         make_params level envs.kind_env params

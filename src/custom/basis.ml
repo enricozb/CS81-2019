@@ -71,44 +71,6 @@ let ternary_fun ty1 ty2 ty3 f = Object.callable_object (lazy (
   )
 ))
 
-(* ------------------------------- Operators ------------------------------- *)
-let operator_ty field =
-  Type.callable_ty ~generic:true
-  [(Type.has_field_ty ~generic:true
-      field
-      (Type.callable_ty ~generic:true [Type.gen_var_ty] Type.gen_var_ty2)
-   );
-   Type.gen_var_ty]
-  Type.gen_var_ty2
-
-let operator_func field =
-  binary_fun
-  (Type.has_field_ty ~generic:true
-    field
-    (Type.callable_ty ~generic:true [Type.gen_var_ty] Type.gen_var_ty2)
-  )
-  Type.gen_var_ty
-  (fun obj b ->
-      let f =
-        Object.get_func_from_callable (Object.get_object_field obj field)
-      in
-      call_prim_func f [b])
-
-let operator field = (operator_ty field, operator_func field)
-
-let add_ty, add = operator "__add__"
-let sub_ty, sub = operator "__sub__"
-let mul_ty, mul = operator "__mul__"
-let div_ty, div = operator "__div__"
-let pow_ty, pow = operator "__pow__"
-
-let eq_ty, eq = operator "__eq__"
-let neq_ty, neq = operator "__neq__"
-let le_ty, le = operator "__le__"
-let lt_ty, lt = operator "__lt__"
-let ge_ty, ge = operator "__ge__"
-let gt_ty, gt = operator "__gt__"
-
 
 (* -------------------------------- Classes -------------------------------- *)
 (* binds obj to the first parameter of func. Used when creating an instance
@@ -133,7 +95,38 @@ let instance_def obj field func =
   let value = (lazy (bind_self (Lazy.force func) obj)) in
   Object.set_object_field obj field value
 
-let rec int_ty =
+let rec class_ty =
+  let rec inner_record = lazy (Type.bare_record_ty
+    [
+     ("~~class~~", string_ty);
+    ])
+  and class_ty = Type.TyFold (Some ("Class", []), inner_record)
+  in
+  class_ty
+
+and type_class_ty =
+  let rec inner_record = lazy (Type.bare_record_ty
+    [
+     ("__repr__", Type.fun_ty [class_ty] string_ty);
+    ])
+  and type_class_ty = Type.TyFold (Some ("TypeClass", []), inner_record)
+  in
+  type_class_ty
+
+(*and showable_trait ty =*)
+  (*let rec inner_record = lazy (Type.bare_record_ty*)
+    (*[*)
+     (*("__class__",*)
+       (*Type.folded_record_ty None [*)
+         (*("__repr__", Type.fun_ty [ty] string_ty)*)
+       (*]*)
+     (*)*)
+    (*])*)
+  (*and showable_trait ty = Type.TyFold (Some ("Showable", [ty]), inner_record)*)
+  (*in*)
+  (*showable_trait*)
+
+and int_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_int_ty);
@@ -151,11 +144,36 @@ let rec int_ty =
      ("__gt__", Type.fun_ty [int_ty] Type.bool_ty);
 
      ("__repr__", Type.fun_ty [] string_ty);
-
+     ("__class__", int_class_ty);
     ])
   and int_ty = Type.TyFold (Some ("Int", []), inner_record)
   in
   int_ty
+
+and int_class_ty =
+  let rec inner_record = lazy (Type.bare_record_ty
+    [("__call__", Type.fun_ty [Type.prim_int_ty] int_ty);
+     ("__add__", Type.fun_ty [int_ty; int_ty] int_ty);
+     ("__sub__", Type.fun_ty [int_ty; int_ty] int_ty);
+     ("__mul__", Type.fun_ty [int_ty; int_ty] int_ty);
+     ("__div__", Type.fun_ty [int_ty; int_ty] int_ty);
+     ("__pow__", Type.fun_ty [int_ty; int_ty] int_ty);
+
+     ("__eq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
+
+     ("__repr__", Type.fun_ty [int_ty] string_ty);
+
+     ("__class__", type_class_ty);
+     ("~~class~~", string_ty);
+    ])
+  and int_class_ty = Type.TyFold (Some ("IntClass", []), inner_record)
+  in
+  int_class_ty
 
 and string_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
@@ -200,28 +218,22 @@ let _ =
   Type.list_of_ty := list_of_ty;
   Type.list_ty := list_ty
 
+(* --------------------------------- Type --------------------------------- *)
+let rec type_class = lazy (
+  let type_repr = lazy (
+    unary_fun
+    class_ty
+    (fun a -> Object.get_object_field a "~~class~~")
+  )
+  in
+  Object.build_object
+    [("__repr__", type_repr);
+     ("__class__", type_class);
+     ("~~class~~", lazy (!Object.make_string "Type"));
+    ])
+
 (* ---------------------------------- Int ---------------------------------- *)
-
-let int_class_ty =
-  Type.folded_record_ty None
-    [("__call__", Type.fun_ty [Type.prim_int_ty] int_ty);
-     ("__add__", Type.fun_ty [int_ty; int_ty] int_ty);
-     ("__sub__", Type.fun_ty [int_ty; int_ty] int_ty);
-     ("__mul__", Type.fun_ty [int_ty; int_ty] int_ty);
-     ("__div__", Type.fun_ty [int_ty; int_ty] int_ty);
-     ("__pow__", Type.fun_ty [int_ty; int_ty] int_ty);
-
-     ("__eq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-     ("__neq__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-     ("__le__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-     ("__lt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-     ("__ge__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-     ("__gt__", Type.fun_ty [int_ty; int_ty] Type.bool_ty);
-
-     ("__repr__", Type.fun_ty [int_ty] string_ty);
-    ]
-
-let int_class =
+let rec int_class = lazy (
   let rec int_uninitialized_object () =
     let obj = Object.build_object [("val", lazy (Value.Int Z.zero))] in
     instance_def obj "__add__" int_add;
@@ -238,6 +250,8 @@ let int_class =
     instance_def obj "__gt__"  int_gt;
 
     instance_def obj "__repr__" int_repr;
+
+    Object.set_object_field obj "__class__" int_class;
     obj
   and int_op f =
     binary_fun
@@ -319,7 +333,8 @@ let int_class =
      ("__gt__", int_gt);
 
      ("__repr__", int_repr);
-    ]
+     ("__class__", type_class);
+    ])
 
 (* -------------------------------- String -------------------------------- *)
 let string_class_ty =
@@ -617,18 +632,12 @@ let val_env = Env.bind_pairs
    (*("and", bool_bool_to_bool (&&));*)
    (*("or", bool_bool_to_bool (||));*)
 
-   ("+", add);
-   ("-", sub);
-   ("*", mul);
-   ("/", div);
-   ("^", pow);
-
-   ("==", eq);
-   ("!=", neq);
-   ("<=", le);
-   ("<",  lt);
-   (">=", ge);
-   (">",  gt);
+   (*("==", eq);*)
+   (*("!=", neq);*)
+   (*("<=", le);*)
+   (*("<",  lt);*)
+   (*(">=", ge);*)
+   (*(">",  gt);*)
 
    ("false", Value.Bool false);
    ("true", Value.Bool true);
@@ -639,7 +648,7 @@ let val_env = Env.bind_pairs
    ("callable", callable);
    ("dir", dir);
 
-   ("Int", int_class);
+   ("Int", Lazy.force int_class);
    ("String", string_class);
    ("List", list_class);
   ]) Env.empty
@@ -650,19 +659,6 @@ let ty_env = Env.bind_pairs
   [
    (*("and", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
    (*("or", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
-
-   ("+", add_ty);
-   ("-", sub_ty);
-   ("*", mul_ty);
-   ("/", div_ty);
-   ("^", pow_ty);
-
-   ("==", eq_ty);
-   ("!=",  neq_ty);
-   ("<=", le_ty);
-   ("<",  lt_ty);
-   (">=", ge_ty);
-   (">",  gt_ty);
 
    ("false", Type.bool_ty);
    ("true", Type.bool_ty);
@@ -683,6 +679,7 @@ let kind_env = Env.bind_pairs
     ("Int", Type.KindFun (Type.kind_fun_0 int_ty));
     ("String", Type.KindFun (Type.kind_fun_0 string_ty));
     ("List", Type.KindFun (Type.kind_fun_1 list_of_ty));
+    (*("Showable", Type.KindFun (Type.kind_fun_0 showable_trait));*)
   ] Env.empty
 
 let envs = Type.({
@@ -692,13 +689,53 @@ let envs = Type.({
   kind_env = kind_env
 })
 
+(*def repr<a: Showable>(x: a) -> String:*)
+  (*return x.__class__.__repr__(x)*)
+
+(*
+trait Showable:
+  val __class__:
+    def __repr__(Self) -> String
+*)
+
 let basis = "
-def repr(x):
-  return x.__repr__()
+def (+)(x, y):
+  return x.__add__(y)
 
-def len(x):
-  return x.__len__()
+def (-)(x, y):
+  return x.__sub__(y)
 
-def print(x):
-  __print_string__(repr(x))
+def (*)(x, y):
+  return x.__mul__(y)
+
+def (/)(x, y):
+  return x.__div__(y)
+
+def (^)(x, y):
+  return x.__pow__(y)
+
+def (==)(x, y):
+  return x.__eq__(y)
+
+def (!=)(x, y):
+  return x.__neq__(y)
 "
+
+
+(*let eq_ty, eq = operator "__eq__"*)
+(*let neq_ty, neq = operator "__neq__"*)
+(*let le_ty, le = operator "__le__"*)
+(*let lt_ty, lt = operator "__lt__"*)
+(*let ge_ty, ge = operator "__ge__"*)
+(*let gt_ty, gt = operator "__gt__"*)
+
+(*let basis = "*)
+(*def repr<a: Showable>(x: a) -> String:*)
+  (*return x.__class__.__repr__(x)*)
+
+(*def len(x):*)
+  (*return x.__len__()*)
+
+(*def print(x):*)
+  (*__print_string__(repr(x))*)
+(*"*)

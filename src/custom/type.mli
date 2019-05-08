@@ -54,7 +54,9 @@ val bool_ty : ty
 val prim_fun_ty : ty list -> ty -> ty
 val fun_ty : ty list -> ty -> ty
 val callable_ty : ?level:level -> ?generic:bool -> ty list -> ty -> ty
-val has_field_ty : ?level:level -> ?generic:bool -> string -> ty -> ty
+val has_field_ty : ?level:level ->
+                   ?generic:bool ->
+                   ?tycon:((id * (ty list)) option) -> string -> ty -> ty
 val bare_record_ty : (string * ty) list -> ty
 val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty
 
