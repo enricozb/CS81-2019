@@ -5,24 +5,28 @@ type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
-  | TyRecord of tyrow
-	| TyRowEmpty
-	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
+  | TyRecord of ty Ast.NameMap.t
+
+  (* TyFold is for recursive types. The (id * (ty list)) portion is meant to *)
+  (* be identical to TyCon. TyFold, if the first part of the tuple is not
+   * None, is a TyCon with a TyRecord backing it. If the ty-con portion of
+   * TyFold is None, then it's jus*)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t)
   | TyUnfold of ty
 
 and tyvar =
   | Link of ty
-  | Unbound of id * level
-  | Generic of id
+  | Unbound of id * level * (traits option)
+  | Generic of id * (traits option)
 
-and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
+and traits = (ty BatDynArray.t)
 
 type kind =
   | KindFun of kind_fun
   | KindVar of ty
 
 and kind_fun = (ty list) -> ty
+
 
 val kind_fun_0 : ty -> kind_fun
 val kind_fun_1 : (ty -> ty) -> kind_fun
@@ -53,9 +57,8 @@ val none_ty : ty
 val bool_ty : ty
 val prim_fun_ty : ty list -> ty -> ty
 val fun_ty : ty list -> ty -> ty
-val callable_ty : ?level:level -> ?generic:bool -> ty list -> ty -> ty
+val callable_ty : ?level:level -> ty list -> ty -> ty
 val has_field_ty : ?level:level ->
-                   ?generic:bool ->
                    ?tycon:((id * (ty list)) option) -> string -> ty -> ty
 val bare_record_ty : (string * ty) list -> ty
 val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty

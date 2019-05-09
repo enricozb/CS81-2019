@@ -719,6 +719,9 @@ def (==)(x, y):
 
 def (!=)(x, y):
   return x.__neq__(y)
+
+def len(x):
+  return x.__len__()
 "
 
 

@@ -1,3 +1,5 @@
+module StringSet = BatSet.String
+
 (* --------------------------------- TYPES --------------------------------- *)
 type id = string
 type level = int
@@ -6,23 +8,22 @@ type ty =
   | TyVar of tyvar ref
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
-  | TyRecord of tyrow
-	| TyRowEmpty
-	| TyRowExtend of ty Ast.NameMap.t * tyrow
+  | TyRecord of ty Ast.NameMap.t
 
   (* TyFold is for recursive types. The (id * (ty list)) portion is meant to *)
   (* be identical to TyCon. TyFold, if the first part of the tuple is not
    * None, is a TyCon with a TyRecord backing it. If the ty-con portion of
-   * TyFold is None, then it's jus*)
+   * TyFold is None, then it's just a record? This field should not be
+   * optional. *)
   | TyFold of ((id * (ty list)) option) * (ty Lazy.t)
   | TyUnfold of ty
 
 and tyvar =
   | Link of ty
-  | Unbound of id * level
-  | Generic of id
+  | Unbound of id * level * (traits option)
+  | Generic of id * (traits option)
 
-and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
+and traits = (ty BatDynArray.t)
 
 type kind =
   | KindFun of kind_fun
@@ -71,31 +72,11 @@ let merge_name_ty_maps name_map1 name_map2 =
             failwith "Type.merge_name_ty_maps: duplicate bindings")
 		name_map1 name_map2
 
-(* returns (ty Ast.NameMap.t * row) where row = TyRowEmpty or a tyvar *)
-let rec collapse_tyrow = function
-	| TyRowExtend (name_ty_map, rest_ty) ->
-      begin match collapse_tyrow rest_ty with
-      | (name_ty_map2, rest_ty) when Ast.NameMap.is_empty name_ty_map2 ->
-          (name_ty_map, rest_ty)
-      | (name_ty_map2, rest_ty) ->
-          (merge_name_ty_maps name_ty_map name_ty_map2, rest_ty)
-      end
-
-	| TyVar {contents = Link ty} ->
-      collapse_tyrow ty
-
-	| TyVar _ as var ->
-      (Ast.NameMap.empty, var)
-
-	| TyRowEmpty -> (Ast.NameMap.empty, TyRowEmpty)
-
-	| ty ->
-      failwith "Type.collapse_tyrow: not a row"
-
-
-(* canonicalizes at least the general types *)
+(* --------------------------- CANONICALIZATION --------------------------- *)
+(* canonicalizes at least the generic types & their trait bounds *)
 let rec string_of_type ty =
-  let id_to_char = Hashtbl.create 26 in
+  let id_to_char = BatHashtbl.create 26 in
+  let id_to_traits = BatHashtbl.create 26 in
   let curr_char = ref 0 in
   let next_char () =
     let i = !curr_char in
@@ -113,17 +94,48 @@ let rec string_of_type ty =
     String.concat ", " (List.map (recurse ~toplevel:false) tys)
 
   and recurse ?(toplevel=false) ty = match ty with
-    | TyVar {contents = Generic id} ->
+    | TyVar {contents = Generic (id, traits)} ->
         begin try
-          Hashtbl.find id_to_char id
+          BatHashtbl.find id_to_char id
         with Not_found ->
           let newid = next_char () in
-          Hashtbl.add id_to_char id newid;
+
+          (* compute the string of the type dependent on whether or not
+           * it has traits. If it has traits, it will be a string like
+           *
+           *   <a: Showable + Iterable[b]>
+           *
+           * if it doesn't, it'll just be something like `a`
+           *
+           * traits are memoized and only used right before return, so
+           * types look something like
+           *
+           *   <a: Showable> => Function[a, String]
+           *)
+          begin match traits with
+          | Some traits ->
+            let traits = List.map recurse (BatDynArray.to_list traits) in
+            let traits_str = String.concat " + " traits in
+            BatHashtbl.add id_to_traits newid traits_str
+          | None -> ()
+          end;
+
+          BatHashtbl.add id_to_char id newid;
           newid
         end
 
-    | TyVar {contents = Unbound (id, _)} ->
+    | TyVar {contents = Unbound (id, _, None)} ->
         "_" ^ id
+    | TyVar {contents = Unbound (id, _, Some traits)} ->
+        begin try
+          BatHashtbl.find id_to_char id
+        with Not_found ->
+          let traits = List.map recurse (BatDynArray.to_list traits) in
+          let traits_str = String.concat " + " traits in
+          BatHashtbl.add id_to_traits id traits_str;
+          BatHashtbl.add id_to_char id ("_" ^ id);
+          "_" ^ id
+        end
 
     | TyVar {contents = Link ty} ->
         recurse ty
@@ -146,29 +158,19 @@ let rec string_of_type ty =
         else
           "(" ^ param_str ^ " -> " ^ (recurse ret_ty) ^ ")"
 
-    | TyRecord tyrow -> "{" ^ (recurse tyrow) ^ "}"
-
-    | TyRowEmpty -> ""
-
-    | TyRowExtend _ as tyrow ->
-        let (name_ty_map, rest_ty) = collapse_tyrow tyrow in
+    | TyRecord name_ty_map ->
         let name_ty_map_str =
 					String.concat ", " @@
 						List.map
 							(fun (field, ty) -> field ^ ": " ^ (recurse ty))
 							(Ast.NameMap.bindings name_ty_map)
 				in
-				let rest_ty_str = match real_ty rest_ty with
-					| TyRowEmpty -> ""
-					| TyRowExtend _ -> assert false
-					| ty -> " ..."
-				in
-				name_ty_map_str ^ rest_ty_str
+        "{" ^ name_ty_map_str ^ "}"
 
-    | TyFold (Some (id, []), rec_ty) ->
-          id
-    | TyFold (Some (id, param_tys), rec_ty) ->
-          id ^ "[" ^ (recurse_tys param_tys) ^ "]"
+    | TyFold (Some (id, []), _) ->
+        id
+    | TyFold (Some (id, param_tys), _) ->
+        id ^ "[" ^ (recurse_tys param_tys) ^ "]"
 
     | TyFold (None, ty) -> recurse (Lazy.force ty)
 
@@ -176,7 +178,13 @@ let rec string_of_type ty =
     | TyUnfold (_) -> "Unfold(" ^ recurse ty ^ ")"
 
   in
-  recurse ~toplevel:true ty
+  let ty_str = recurse ~toplevel:true ty in
+  let trait_bindings = BatHashtbl.bindings id_to_traits in
+  let trait_strings =
+    List.map (fun (id, traits) -> id ^ ": " ^ traits) trait_bindings
+  in
+  let traits = "<" ^ (String.concat ", " trait_strings) ^ ">" in
+  traits ^ " => " ^ ty_str
 
 
 (* errors if occurs check fails, otherwise returns unit *)
@@ -185,12 +193,21 @@ let rec occurs loc tyvar_id tyvar_level ty =
 
   match ty with
     | TyVar {contents = Generic _} -> assert false
-    | TyVar ({contents = Unbound(tyvar_id2, tyvar_level2)} as tyvar2) ->
+    | TyVar ({contents = Unbound (tyvar_id2, tyvar_level2, traits)} as tyvar2) ->
+      (* check if we occur in any of the traits *)
+      begin match traits with
+      | Some traits ->
+          BatDynArray.iter recurse traits
+      | None -> ()
+      end;
+
+      (* if this doesn't error out, we can update the level of tyvar2 for
+       * reasons I still don't understand... *)
       if tyvar_id = tyvar_id2 then
         Error.type_error loc "recursive types"
-      else
-        if tyvar_level2 > tyvar_level then
-          tyvar2 := Unbound(tyvar_id2, tyvar_level)
+      else if tyvar_level2 > tyvar_level then
+        tyvar2 := Unbound (tyvar_id2, tyvar_level, traits)
+
     | TyVar {contents = Link ty} ->
         recurse ty
 
@@ -201,14 +218,8 @@ let rec occurs loc tyvar_id tyvar_level ty =
         List.iter recurse param_tys;
         recurse ret_ty
 
-    | TyRecord tyrow ->
-        recurse tyrow
-
-		| TyRowEmpty -> ()
-
-		| TyRowExtend (name_ty_map, rest_ty) ->
-        Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
-				recurse rest_ty
+		| TyRecord (name_ty_map) ->
+        Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map
 
     | TyFold (Some (id, param_tys), ty) ->
         List.iter recurse param_tys
@@ -219,13 +230,13 @@ let rec occurs loc tyvar_id tyvar_level ty =
         failwith "Type.occurs on TyUnfold"
 
 let rec fresh_counter = ref 0
-and fresh_tyvar level _ =
+and fresh_tyvar level ?(traits=None) _ =
   incr fresh_counter;
-  TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level)}
+  TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level, traits)}
 
 and fresh_gen_tyvar _ =
   incr fresh_counter;
-  TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
+  TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter, None)}
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
 (* initialized in basis.ml *)
@@ -235,8 +246,8 @@ let list_ty = ref (TyCon ("FakeList", []))
 let list_of_ty = ref (fun _ -> TyCon ("FakeList", []))
 
 
-let gen_var_ty = TyVar {contents = Generic "a"}
-let gen_var_ty2 = TyVar {contents = Generic "b"}
+let gen_var_ty = TyVar {contents = Generic ("a", None)}
+let gen_var_ty2 = TyVar {contents = Generic ("b", None)}
 
 let prim_int_ty = TyCon ("int", [])
 let prim_string_ty = TyCon ("string", [])
@@ -257,24 +268,18 @@ let rec base_record_fields () =
 
 and bare_record_ty name_ty_list =
   TyRecord (
-    TyRowExtend (
-      List.fold_left
-        (fun name_ty_map (name, ty) ->
-          Ast.NameMap.add name ty name_ty_map)
-      (base_record_fields ()) name_ty_list,
-      TyRowEmpty
-    )
+    List.fold_left
+      (fun name_ty_map (name, ty) -> Ast.NameMap.add name ty name_ty_map)
+      (base_record_fields ())
+      name_ty_list
   )
 
 and folded_record_ty tycon name_ty_list =
   TyFold (tycon, lazy (TyRecord (
-    TyRowExtend (
       List.fold_left
-        (fun name_ty_map (name, ty) ->
-          Ast.NameMap.add name ty name_ty_map)
-      (base_record_fields ()) name_ty_list,
-      TyRowEmpty
-    )
+        (fun name_ty_map (name, ty) -> Ast.NameMap.add name ty name_ty_map)
+        (base_record_fields ())
+        name_ty_list
   )))
 
 and fun_ty param_tys ret_ty =
@@ -288,31 +293,117 @@ and fun_ty param_tys ret_ty =
   in
   func_type
 
-let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
+let callable_trait param_tys ret_ty =
   let fun_ty = fun_ty param_tys ret_ty in
   TyFold (Some ("Callable", param_tys @ [ret_ty]), lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton "__call__" fun_ty,
-      if generic then
-        fresh_gen_tyvar ()
-      else
-        fresh_tyvar level ()
-    )
+      Ast.NameMap.singleton "__call__" fun_ty
   )))
 
-let has_field_ty ?(level=0) ?(generic=false) ?(tycon=None) field ty =
+let has_field_trait ?(tycon=None) field ty =
   TyFold (tycon, lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton field ty,
-      if generic then
-        fresh_gen_tyvar ()
-      else
-        fresh_tyvar level ()
-    )
+      Ast.NameMap.singleton field ty
   )))
+
+let callable_ty ?(level=0) param_tys ret_ty =
+  let traits = BatDynArray.of_list [callable_trait param_tys ret_ty] in
+  fresh_tyvar level ~traits:(Some traits) ()
+
+let has_field_ty ?(level=0) ?(tycon=None) field ty =
+  let traits = BatDynArray.of_list [has_field_trait ~tycon:tycon field ty] in
+  fresh_tyvar level ~traits:(Some traits) ()
+
+(* -------------------------------- TRAITS -------------------------------- *)
+let rec check_record_conflict loc record1 record2 =
+  let (fields1, _) = List.split (Ast.NameMap.bindings record1) in
+  let (fields2, _) = List.split (Ast.NameMap.bindings record2) in
+
+  (* these are fields that the trait has but the conforming type doesn't *)
+  let shared_fields =
+    StringSet.inter (StringSet.of_list fields1) (StringSet.of_list fields2)
+  in
+
+  (* unify types in the trait *)
+  StringSet.iter
+    (fun field ->
+      let ty1 = Ast.NameMap.find field record1 in
+      let ty2 = Ast.NameMap.find field record2 in
+      unify loc ty1 ty2
+    )
+    shared_fields
+
+(* check that these two traits don't conflict *)
+and check_trait_conflict loc trait1 trait2 =
+  match trait1, trait2 with
+  | TyFold (_, record1), TyFold (_, record2) ->
+      check_trait_conflict loc (Lazy.force record1) (Lazy.force record2)
+
+  | TyFold (_, record1), TyRecord _ ->
+      check_trait_conflict loc (Lazy.force record1) trait2
+
+  | TyRecord _, TyFold(_, record2) ->
+      check_trait_conflict loc trait1 (Lazy.force record2)
+
+  | TyRecord record1, TyRecord record2 ->
+      check_record_conflict loc record1 record2
+
+  | _ ->
+      failwith "traits must be records"
+
+(* check that no traits in `traits2` conflict with those in `traits1` *)
+and check_traits_conflict loc traits1 traits2 =
+  BatDynArray.map
+    (fun trait2 ->
+      BatDynArray.map (fun trait1 -> check_trait_conflict trait1 trait2)
+    )
+    traits2
+
+(* checks if `record2` conforms to `record1`. Basically if all of the fields in
+ * `record1` are also in `record2`, and the types match. *)
+and conforms_to_record loc record1 record2 =
+  let (fields1, _) = List.split (Ast.NameMap.bindings record1) in
+  let (fields2, _) = List.split (Ast.NameMap.bindings record2) in
+
+  (* these are fields that the trait has but the conforming type doesn't *)
+  let missing_fields =
+    StringSet.diff (StringSet.of_list fields1) (StringSet.of_list fields2)
+  in
+
+  if StringSet.cardinal missing_fields > 0 then begin
+    Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);
+    Error.missing_field loc (StringSet.any missing_fields)
+  end;
+
+  (* unify types in the trait *)
+  Ast.NameMap.iter
+    (fun field ty1 ->
+      let ty2 = Ast.NameMap.find field record2 in
+      unify loc ty1 ty2
+    )
+    record1
+
+and conforms_to_trait loc trait ty =
+  match (trait, ty) with
+  | TyFold (_, record1), TyFold (_, record2) ->
+      conforms_to_trait loc (Lazy.force record1) (Lazy.force record2)
+
+  | TyFold (_, record1), TyRecord _ ->
+      conforms_to_trait loc (Lazy.force record1) ty
+
+  | TyRecord _, TyFold(_, record2) ->
+      conforms_to_trait loc trait (Lazy.force record2)
+
+  | TyRecord record1, TyRecord record2 ->
+      conforms_to_record loc record1 record2
+
+  (* if they're both not records then ?? *)
+  | _ ->
+      unify loc trait ty
+
+and conforms_to_traits loc traits ty =
+  BatDynArray.iter (fun trait -> conforms_to_trait loc trait ty) traits
 
 (* ------------------------------ UNIFICATION ------------------------------ *)
-let rec unify loc ty1 ty2 =
+and unify loc ty1 ty2 =
   let unify = unify loc in
   if ty1 == ty2 then
     ()
@@ -328,11 +419,33 @@ let rec unify loc ty1 ty2 =
     | ty1, TyVar {contents = Link ty2} ->
         unify ty1 ty2
 
-    | TyVar ({contents = Unbound (tyvar_id, tyvar_level)} as ty_ref), ty
-    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level)} as ty_ref) ->
+    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref), ty
+    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref) ->
         (* TODO: maybe catch the MythError and raise an error specific to
          * the two types `ty1` and `ty2`? *)
         occurs loc tyvar_id tyvar_level ty;
+        ty_ref := Link ty
+
+    | TyVar ({contents = Unbound (id1, level1, Some traits1)} as ty_ref1),
+      TyVar ({contents = Unbound (id2, level2, Some traits2)} as ty_ref2) ->
+        (* WLOG: add all of ty2's traits to ty1's, and point ty2 to ty1. *)
+        (* TODO: no idea if both occurs are necessary *)
+        occurs loc id1 level1 ty2;
+        occurs loc id2 level2 ty1;
+
+        (* check that all of traits2 don't conflict with any of traits1 *)
+        check_traits_conflict loc traits1 traits2;
+        (* add all elements of traits2 to traits1 *)
+        BatDynArray.append traits2 traits1;
+
+        ty_ref2 := Link ty1
+
+    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some traits)} as ty_ref), ty
+    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some traits)} as ty_ref) ->
+        (* TODO: maybe catch the MythError and raise an error specific to
+         * the two types `ty1` and `ty2`? *)
+        occurs loc tyvar_id tyvar_level ty;
+        conforms_to_traits loc traits ty;
         ty_ref := Link ty
 
     | TyFun (ty_params1, ty_ret1), TyFun (ty_params2, ty_ret2) ->
@@ -346,18 +459,8 @@ let rec unify loc ty1 ty2 =
         List.iter2 unify ty_params1 ty_params2;
         unify ty_ret1 ty_ret2
 
-    | TyRecord tyrow1, TyRecord tyrow2 ->
-        unify tyrow1 tyrow2
-
-		| TyRowEmpty, TyRowEmpty -> ()
-
-    | (TyRowExtend _ as tyrow1), (TyRowExtend _ as tyrow2) ->
-        unify_rows loc tyrow1 tyrow2
-
-    | TyRowEmpty, TyRowExtend (name_ty_map, _)
-    | TyRowExtend (name_ty_map, _), TyRowEmpty ->
-				let field, _ = Ast.NameMap.choose name_ty_map in
-				Error.missing_field loc field
+    | TyRecord record1, TyRecord record2 ->
+        unify_records loc record1 record2
 
     | TyUnfold (TyFold (_, ty1)), ty2
     | ty2, TyUnfold (TyFold (_, ty1)) ->
@@ -382,64 +485,25 @@ let rec unify loc ty1 ty2 =
         Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
 
 
-and unify_rows loc tyrow1 tyrow2 =
-  let name_ty_map1, rest_ty1 = collapse_tyrow tyrow1 in
-	let name_ty_map2, rest_ty2 = collapse_tyrow tyrow2 in
+and unify_records loc record1 record2 =
+  let (fields1, _) = List.split (Ast.NameMap.bindings record1) in
+  let (fields2, _) = List.split (Ast.NameMap.bindings record2) in
 
-  let bind_distinct_names name_ty_map name_ty_list =
-    List.fold_left
-      (fun name_ty_map (name, ty) ->
-        assert (not (Ast.NameMap.mem name name_ty_map));
-        Ast.NameMap.add name ty name_ty_map)
-    name_ty_map name_ty_list
+  let missing_fields =
+    StringSet.sym_diff (StringSet.of_list fields1) (StringSet.of_list fields2)
   in
 
-  let rec unify_names missing1 missing2 names1 names2 =
-    match (names1, names2) with
-    | [], [] -> missing1, missing2
-    | ([], _) -> (bind_distinct_names missing1 names2, missing2)
-		| (_, []) -> (missing1, bind_distinct_names missing2 names1)
-    | ((name1, ty1) :: rest1, (name2, ty2) :: rest2) ->
-      begin match Ast.compare_names name1 name2 with
-      | 0 ->
-          unify loc ty1 ty2;
-          unify_names missing1 missing2 rest1 rest2
+  if StringSet.cardinal missing_fields > 0 then begin
+    Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);
+    Error.missing_field loc (StringSet.any missing_fields)
+  end;
 
-      | x when x < 0 ->
-          unify_names missing1 (Ast.NameMap.add name1 ty1 missing2) rest1 names2
-
-      | x ->
-          unify_names (Ast.NameMap.add name2 ty2 missing1) missing2 names1 rest2
-      end
-  in
-
-  let (missing1, missing2) =
-      unify_names Ast.NameMap.empty Ast.NameMap.empty
-        (Ast.NameMap.bindings name_ty_map1)
-        (Ast.NameMap.bindings name_ty_map2)
-  in
-
-  match (Ast.NameMap.is_empty missing1, Ast.NameMap.is_empty missing2) with
-		| (true, true) -> unify loc rest_ty1 rest_ty2
-		| (true, false) -> unify loc (TyRowExtend (missing2, rest_ty1)) rest_ty2
-		| (false, true) -> unify loc rest_ty1 (TyRowExtend (missing1, rest_ty2))
-		| (false, false) ->
-				begin match rest_ty1 with
-					| TyRowEmpty ->
-							(* will result in an error *)
-							unify loc rest_ty1 (TyRowExtend (missing1, fresh_tyvar 0 ()))
-
-					| TyVar ({contents = Unbound (_, level)} as ty_ref) ->
-							let new_rest_row_var = fresh_tyvar level () in
-							unify loc rest_ty2 (TyRowExtend (missing2, new_rest_row_var));
-							begin match !ty_ref with
-								| Link _ -> Error.type_error loc "recursive types"
-								| _ -> ()
-              end;
-							unify loc rest_ty1 (TyRowExtend (missing1, new_rest_row_var))
-
-					| _ -> assert false
-        end
+  Ast.NameMap.iter
+    (fun field ty1 ->
+      let ty2 = Ast.NameMap.find field record2 in
+      unify loc ty1 ty2
+    )
+    record1
 
 and pairwise_unify loc tys = match tys with
   | [] -> ()
@@ -452,8 +516,14 @@ and pairwise_unify loc tys = match tys with
 (* -------------------- GENERALIZATION & INSTANTIATION -------------------- *)
 let rec generalize level ty =
   match ty with
-  | TyVar {contents = Unbound(tyvar_id, tyvar_level)} when tyvar_level > level ->
-			TyVar (ref (Generic tyvar_id))
+  | TyVar {contents = Unbound (tyvar_id, tyvar_level, None)}
+    when tyvar_level > level ->
+			TyVar (ref (Generic (tyvar_id, None)))
+  | TyVar {contents = Unbound (tyvar_id, tyvar_level, Some traits)}
+    when tyvar_level > level ->
+			TyVar (ref
+        (Generic (tyvar_id, Some (BatDynArray.map (generalize level) traits)))
+      )
 	| TyVar {contents = Link ty} -> generalize level ty
 
 	| TyCon (name, param_tys) ->
@@ -462,16 +532,11 @@ let rec generalize level ty =
 	| TyFun (param_tys, ret_ty) ->
 			TyFun (List.map (generalize level) param_tys, generalize level ret_ty)
 
-  | TyRecord tyrow -> TyRecord (generalize level tyrow)
-
-  | TyRowExtend (name_ty_map, rest_ty) ->
-        TyRowExtend (Ast.NameMap.map (generalize level) name_ty_map,
-                     generalize level rest_ty)
+  | TyRecord name_ty_map ->
+      TyRecord (Ast.NameMap.map (generalize level) name_ty_map)
 
 	| TyVar {contents = Generic _}
-  | TyVar {contents = Unbound _}
-
-  | TyRowEmpty as ty -> ty
+  | TyVar {contents = Unbound _} -> ty
 
   | TyFold (None, ty) ->
       TyFold (None, lazy (generalize level (Lazy.force ty)))
@@ -486,11 +551,20 @@ let rec instantiate level ty =
 	let generic_to_unbound = Hashtbl.create 100 in
   let rec recurse = function
 		| TyVar {contents = Link ty} -> recurse ty
-		| TyVar {contents = Generic gen_id} ->
+		| TyVar {contents = Generic (gen_id, None)} ->
 				begin try
 					Hashtbl.find generic_to_unbound gen_id
 				with Not_found ->
 					let tyvar = fresh_tyvar level () in
+					Hashtbl.add generic_to_unbound gen_id tyvar;
+					tyvar
+        end
+		| TyVar {contents = Generic (gen_id, Some traits)} ->
+				begin try
+					Hashtbl.find generic_to_unbound gen_id
+				with Not_found ->
+          let traits = BatDynArray.map recurse traits in
+          let tyvar = fresh_tyvar level ~traits:(Some traits) () in
 					Hashtbl.add generic_to_unbound gen_id tyvar;
 					tyvar
         end
@@ -502,12 +576,8 @@ let rec instantiate level ty =
 		| TyFun (param_tys, ret_ty) ->
 				TyFun (List.map recurse param_tys, recurse ret_ty)
 
-    | TyRecord tyrow -> TyRecord (recurse tyrow)
-
-		| TyRowEmpty as ty -> ty
-
-		| TyRowExtend (name_ty_map, rest_ty) ->
-				TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
+		| TyRecord name_ty_map ->
+				TyRecord (Ast.NameMap.map recurse name_ty_map)
 
     | TyFold (None, ty) ->
         TyFold (None, lazy (recurse (Lazy.force ty)))
@@ -668,16 +738,13 @@ and infer level envs ast = match ast with
           name_ty_map
       in
       if Ast.NameMap.is_empty name_ty_map then
-        TyFold (None, lazy (TyRecord TyRowEmpty))
+        TyFold (None, lazy (TyRecord Ast.NameMap.empty))
       else
-        TyFold (None, lazy (TyRecord (TyRowExtend (name_ty_map, TyRowEmpty))))
+        TyFold (None, lazy (TyRecord name_ty_map))
 
   | Ast.Field (l, ast, name) ->
-      let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
-      in
+      let record_ty = has_field_ty ~level:level name field_ty in
 			unify l record_ty (infer level envs ast);
 			field_ty
 
@@ -741,11 +808,9 @@ and infer level envs ast = match ast with
       ast_ty
 
   | Ast.SetField (l, ast1, name, ast2) ->
-      let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
-      in
+      let record_ty = has_field_ty ~level:level name field_ty in
+
       let ast1_ty = infer level envs ast1 in
       let ast2_ty = infer level envs ast2 in
 

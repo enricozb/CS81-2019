@@ -10,7 +10,8 @@ let print_tests_stats () =
 (* runs ast then returns type and value *)
 let run_ty_val envs ast =
   let (envs, ty) = Type.typecheck ~level:!curr_level envs ast in
-  let (val_env, v) = Eval.eval envs.val_env ast in
+  (*let (val_env, v) = Eval.eval envs.val_env ast in*)
+  let (val_env, v) = (envs.val_env, Value.None) in
   ({envs with val_env = val_env}, ty, v)
 
 
