@@ -180,11 +180,14 @@ let rec string_of_type ty =
   in
   let ty_str = recurse ~toplevel:true ty in
   let trait_bindings = BatHashtbl.bindings id_to_traits in
-  let trait_strings =
-    List.map (fun (id, traits) -> id ^ ": " ^ traits) trait_bindings
-  in
-  let traits = "<" ^ (String.concat ", " trait_strings) ^ ">" in
-  traits ^ " => " ^ ty_str
+  if trait_bindings = [] then
+    ty_str
+  else
+    let trait_strings =
+      List.map (fun (id, traits) -> id ^ ": " ^ traits) trait_bindings
+    in
+    let traits = "<" ^ (String.concat ", " trait_strings) ^ ">" in
+    traits ^ " => " ^ ty_str
 
 
 (* errors if occurs check fails, otherwise returns unit *)
@@ -327,7 +330,7 @@ let rec check_record_conflict loc record1 record2 =
     (fun field ->
       let ty1 = Ast.NameMap.find field record1 in
       let ty2 = Ast.NameMap.find field record2 in
-      unify loc ty1 ty2
+      check_trait_conflict loc ty1 ty2
     )
     shared_fields
 
@@ -335,6 +338,7 @@ let rec check_record_conflict loc record1 record2 =
 and check_trait_conflict loc trait1 trait2 =
   match trait1, trait2 with
   | TyFold (_, record1), TyFold (_, record2) ->
+      (* TODO: halt on already seen id1 to id2, or else we'll infinite loop *)
       check_trait_conflict loc (Lazy.force record1) (Lazy.force record2)
 
   | TyFold (_, record1), TyRecord _ ->
@@ -347,13 +351,33 @@ and check_trait_conflict loc trait1 trait2 =
       check_record_conflict loc record1 record2
 
   | _ ->
-      failwith "traits must be records"
+      unify loc trait1 trait2
 
 (* check that no traits in `traits2` conflict with those in `traits1` *)
 and check_traits_conflict loc traits1 traits2 =
-  BatDynArray.map
+  BatDynArray.iter
     (fun trait2 ->
-      BatDynArray.map (fun trait1 -> check_trait_conflict trait1 trait2)
+      BatDynArray.iter
+        (fun trait1 -> check_trait_conflict loc trait1 trait2)
+        traits1
+    )
+    traits2;
+
+  (* we know no traits conflict, but we want to return the traits in traits2
+   * that aren't already basically present in traits1 *)
+  BatDynArray.filter
+    (fun t2 ->
+      let rec iter rest = match rest with
+        | [] -> true
+        | t1 :: rest ->
+          try
+            conforms_to_trait loc t2 t1;
+            false
+          (* TODO: ooooo catching this giant error seems weird af *)
+          with Error.MythError (_, _) ->
+            iter rest
+      in
+      iter (BatDynArray.to_list traits1)
     )
     traits2
 
@@ -369,7 +393,7 @@ and conforms_to_record loc record1 record2 =
   in
 
   if StringSet.cardinal missing_fields > 0 then begin
-    Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);
+    (*Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);*)
     Error.missing_field loc (StringSet.any missing_fields)
   end;
 
@@ -377,14 +401,19 @@ and conforms_to_record loc record1 record2 =
   Ast.NameMap.iter
     (fun field ty1 ->
       let ty2 = Ast.NameMap.find field record2 in
-      unify loc ty1 ty2
+      conforms_to_trait loc ty1 ty2
     )
     record1
 
 and conforms_to_trait loc trait ty =
   match (trait, ty) with
-  | TyFold (_, record1), TyFold (_, record2) ->
-      conforms_to_trait loc (Lazy.force record1) (Lazy.force record2)
+  | TyFold (tycon1, record1), TyFold (tycon2, record2) ->
+      begin match tycon1, tycon2 with
+        | Some (id1, ty_params1), Some (id2, ty_params2) ->
+            unify loc (TyCon (id1, ty_params1)) (TyCon (id2, ty_params2))
+        | _ ->
+          conforms_to_trait loc (Lazy.force record1) (Lazy.force record2)
+      end
 
   | TyFold (_, record1), TyRecord _ ->
       conforms_to_trait loc (Lazy.force record1) ty
@@ -395,7 +424,6 @@ and conforms_to_trait loc trait ty =
   | TyRecord record1, TyRecord record2 ->
       conforms_to_record loc record1 record2
 
-  (* if they're both not records then ?? *)
   | _ ->
       unify loc trait ty
 
@@ -434,9 +462,9 @@ and unify loc ty1 ty2 =
         occurs loc id2 level2 ty1;
 
         (* check that all of traits2 don't conflict with any of traits1 *)
-        check_traits_conflict loc traits1 traits2;
+        let unique_traits = check_traits_conflict loc traits1 traits2 in
         (* add all elements of traits2 to traits1 *)
-        BatDynArray.append traits2 traits1;
+        BatDynArray.append unique_traits traits1;
 
         ty_ref2 := Link ty1
 
@@ -494,7 +522,7 @@ and unify_records loc record1 record2 =
   in
 
   if StringSet.cardinal missing_fields > 0 then begin
-    Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);
+    (*Printf.printf "Missing %i fields.\n" (StringSet.cardinal missing_fields);*)
     Error.missing_field loc (StringSet.any missing_fields)
   end;
 
