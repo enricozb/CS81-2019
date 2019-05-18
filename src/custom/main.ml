@@ -92,20 +92,20 @@ let rec run ?(quiet=false) envs ast =
 
         (* if the value is an object get repr of `_` and print it
          * otherwise dispatch the printing to Value.string_of_value *)
-        let (envs, repr) =
-          match v with
-          | Value.Object _ ->
-            let (envs, _, repr) =
-              run_ast
-                envs
-                (Ast.Call (loc, Ast.Name (loc, "repr"), [Ast.Name (loc, "_")]))
-            in
-            (* grab raw string out of `repr` *)
-            begin match Object.get_object_field repr "val" with
-              | Value.String s -> (envs, s)
-              | _ -> failwith "Main.run: string values is malformed"
-            end
-          | _ -> (envs, Value.string_of_value v)
+        let (envs, repr) = (envs, Value.string_of_value v)
+          (*match v with*)
+          (*| Value.Object _ ->*)
+            (*let (envs, _, repr) =*)
+              (*run_ast*)
+                (*envs*)
+                (*(Ast.Call (loc, Ast.Name (loc, "repr"), [Ast.Name (loc, "_")]))*)
+            (*in*)
+            (*(* grab raw string out of `repr` *)*)
+            (*begin match Object.get_object_field repr "val" with*)
+              (*| Value.String s -> (envs, s)*)
+              (*| _ -> failwith "Main.run: string values is malformed"*)
+            (*end*)
+          (*| _ -> (envs, Value.string_of_value v)*)
         in
         Printf.printf "%s : %s\n" repr (Type.string_of_type ty);
         envs

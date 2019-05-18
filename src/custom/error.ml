@@ -4,6 +4,7 @@ type error =
   | BindError of string
   | TypeError of string
   | SyntaxError of string
+  | ImplementationError of string
 
 exception MythError of Loc.loc * error
 
@@ -16,6 +17,8 @@ let string_of_error l = function
       (Loc.string_of_loc_short l) ^ "; SyntaxError"
   | SyntaxError s ->
       (Loc.string_of_loc_short l) ^ "; SyntaxError: '" ^ s ^ "'"
+  | ImplementationError s ->
+      (Loc.string_of_loc_short l) ^ "; ImplementationError: '" ^ s ^ "'"
 
 let print_error l error = Printf.printf "%s\n" (string_of_error l error)
 
@@ -71,4 +74,6 @@ let flow_outside_loop l =
 
 let bind_error l id =
   error l (BindError ("cannot assign to '" ^ id ^ "' as it is not mutable"))
+
+let implementation_error ?(loc=Loc.fake_loc) s = error loc (RuntimeError s)
 

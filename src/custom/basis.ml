@@ -702,3 +702,6 @@ def len(x):
 def print(x):
   __print_string__(repr(x))
 "
+
+let basis = ""
+

@@ -4,6 +4,7 @@ type error =
   | BindError of string
   | TypeError of string
   | SyntaxError of string
+  | ImplementationError of string
 
 exception MythError of Loc.loc * error
 
@@ -32,4 +33,6 @@ val type_not_found_error : Loc.loc -> string -> 'a
 val unreachable_code_error : Loc.loc -> string -> 'a
 val return_outside_def : Loc.loc -> 'a
 val flow_outside_loop : Loc.loc -> 'a
+
+val implementation_error: ?loc: Loc.loc -> string -> 'a
 

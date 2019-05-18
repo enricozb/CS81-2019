@@ -13,6 +13,7 @@
 - Add `not` operator
 - Add TCO
 - Add debug mode for printing tokens
+    and just debug printing in general...
 - Check out bidirectional types
 
 ## Bugs

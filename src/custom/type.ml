@@ -107,7 +107,8 @@ let rec string_of_type ty =
   let rec recurse_tys tys =
     String.concat ", " (List.map (recurse ~toplevel:false) tys)
 
-  and recurse ?(toplevel=false) ty = match ty with
+  and recurse ?(toplevel=false) ty =
+    match ty with
     | TyVar {contents = Generic id} ->
         begin try
           Hashtbl.find id_to_char id
@@ -143,7 +144,7 @@ let rec string_of_type ty =
 
     | TyRecord tyrow -> "{" ^ (recurse tyrow) ^ "}"
 
-    | TyRowEmpty -> ""
+    | TyRowEmpty -> " E "
 
     | TyRowExtend _ as tyrow ->
         let (name_ty_map, rest_ty) = collapse_tyrow tyrow in
@@ -160,15 +161,25 @@ let rec string_of_type ty =
 				in
 				name_ty_map_str ^ rest_ty_str
 
-    | TyFold (Some (id, []), rec_ty) ->
-          id
-    | TyFold (Some (id, param_tys), rec_ty) ->
-          id ^ "[" ^ (recurse_tys param_tys) ^ "]"
+    | TyFold (Some (id, []), _) ->
+        (*"FOLD(" ^ id ^ ")"*)
+        id
+    | TyFold (Some (id, param_tys), _) ->
+        (*"FOLD(" ^ id ^ "[" ^ (recurse_tys param_tys) ^ "])"*)
+        id ^ "[" ^ (recurse_tys param_tys) ^ "]"
 
-    | TyFold (None, ty) -> recurse (Lazy.force ty)
+    | TyFold (None, ty) ->
+        (*"FOLD(" ^ recurse (Lazy.force ty) ^ ")"*)
+        recurse (Lazy.force ty)
 
-    | TyUnfold (TyFold (_, ty)) -> recurse (Lazy.force ty)
-    | TyUnfold (_) -> "Unfold(" ^ recurse ty ^ ")"
+    | TyUnfold (ty1) ->
+				begin match real_ty ty1 with
+					| TyFold (_, ty1) ->
+            recurse (Lazy.force ty1)
+          | _ ->
+            Error.implementation_error
+              "Type.string_of_type: TyUnfold on non-TyFold"
+        end
 
   in
   recurse ~toplevel:true ty
@@ -205,13 +216,18 @@ let rec occurs loc tyvar_id tyvar_level ty =
         Ast.NameMap.iter (fun field ty -> recurse ty) name_ty_map;
 				recurse rest_ty
 
-    | TyFold (Some (id, param_tys), ty) ->
+    | TyFold (Some (id, param_tys), _) ->
         List.iter recurse param_tys
-    | TyFold (None, ty) ->
+
+    (* to allow recursive checks, aka
+     *    does `a` occur in {x: FOLD({y: a | b})}
+     *)
+    | TyFold (None, ty)
+    | TyUnfold (TyFold (_, ty)) ->
         recurse (Lazy.force ty)
 
     | TyUnfold _ ->
-        failwith "Type.occurs on TyUnfold"
+        failwith "Type.occurs on bare TyUnfold"
 
 let rec fresh_counter = ref 0
 and fresh_tyvar level _ =
@@ -354,25 +370,24 @@ let rec unify loc ty1 ty2 =
 				let field, _ = Ast.NameMap.choose name_ty_map in
 				Error.missing_field loc field
 
-    | TyUnfold (TyFold (_, ty1)), ty2
-    | ty2, TyUnfold (TyFold (_, ty1)) ->
-        unify (Lazy.force ty1) ty2
+    | TyFold (Some (id1, param_tys1), _),
+      TyFold (Some (id2, param_tys2), _) ->
+        unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
 
-    (* TODO: is this the right way to check the names? *)
-    | TyFold (Some (id1, param_tys1), rec_ty1),
-      TyFold (Some (id2, param_tys2), rec_ty2) ->
-          if id1 = id2 then
-            unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
-          else begin try
-            unify (Lazy.force rec_ty1) (Lazy.force rec_ty2)
-          with Error.MythError _ ->
-            Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
-          end
-
-    | TyFold (_, ty1), TyFold (_, ty2) ->
+    | TyFold (None, ty1), TyFold (None, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)
 
-    (* TODO: no idea if this should be here... *)
+    | TyUnfold (ty1), ty2
+    | ty2, TyUnfold (ty1) ->
+				begin match real_ty ty1 with
+					| TyFold (_, ty1) ->
+            unify (Lazy.force ty1) ty2
+          | _ ->
+            Error.implementation_error
+              ~loc: loc
+              "Type.unify: TyUnfold on non-TyFold"
+        end
+
     | TyFold (Some (name1, params1), _), TyCon (name2, params2)
     | TyCon (name1, params1), TyFold (Some (name2, params2), _) ->
         unify (TyCon (name1, params1)) (TyCon (name2, params2))
@@ -674,10 +689,10 @@ and infer level envs ast = match ast with
   | Ast.Field (l, ast, name) ->
       let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
+			let record_ty = TyUnfold (TyFold (None, lazy (TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))))
       in
-			unify l record_ty (infer level envs ast);
+			unify l record_ty (TyUnfold (infer level envs ast));
 			field_ty
 
   | Ast.Lambda (l, params, ast) ->
@@ -742,13 +757,13 @@ and infer level envs ast = match ast with
   | Ast.SetField (l, ast1, name, ast2) ->
       let rest_ty = fresh_tyvar level () in
 			let field_ty = fresh_tyvar level () in
-			let record_ty = TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty))))
+			let record_ty = TyUnfold (TyFold (None, lazy (TyRecord
+        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))))
       in
       let ast1_ty = infer level envs ast1 in
       let ast2_ty = infer level envs ast2 in
 
-			unify l record_ty ast1_ty;
+			unify l record_ty (TyUnfold ast1_ty);
       unify l field_ty ast2_ty;
 
       ast2_ty
