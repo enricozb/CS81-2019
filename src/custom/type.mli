@@ -6,8 +6,8 @@ type ty =
   | TyCon of id * (ty list)
   | TyFun of (ty list) * ty
   | TyRecord of tyrow
-	| TyRowEmpty
-	| TyRowExtend of ty Ast.NameMap.t * tyrow
+  | TyRowEmpty
+  | TyRowExtend of ty Ast.NameMap.t * tyrow
   | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types *)
   | TyUnfold of ty
 
