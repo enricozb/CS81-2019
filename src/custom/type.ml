@@ -9,21 +9,25 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types *)
   | TyUnfold of ty
 
 and tyvar =
   | Link of ty
-  | Unbound of id * level
-  | Generic of id
+  | Unbound of id * level * (trait option)
+  | Generic of id * (trait option)
 
-and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
-
-type kind =
+and kind =
   | KindFun of kind_fun
   | KindVar of ty
 
 and kind_fun = (ty list) -> ty
+
+(* a mutable TyFold *)
+and trait = (string ref) * ((ty list) ref) * (ty Lazy.t)
+
+and tyrow = ty (* kind of rows should only be TyRowEmpty or TyRowExtend *)
+
 
 let kind_fun_0 ty =
   let kind_fun param_tys =
@@ -90,7 +94,9 @@ let rec collapse_tyrow = function
 
 (* canonicalizes at least the general types *)
 let rec string_of_type ty =
-  let id_to_char = Hashtbl.create 26 in
+  let id_to_char = BatHashtbl.create 26 in
+  let id_to_traits = BatHashtbl.create 26 in
+
   let curr_char = ref 0 in
   let next_char () =
     let i = !curr_char in
@@ -109,17 +115,44 @@ let rec string_of_type ty =
 
   and recurse ?(toplevel=false) ty =
     match ty with
-    | TyVar {contents = Generic id} ->
+    | TyVar {contents = Generic (id, trait)} ->
         begin try
-          Hashtbl.find id_to_char id
+          BatHashtbl.find id_to_char id
         with Not_found ->
           let newid = next_char () in
-          Hashtbl.add id_to_char id newid;
+
+          (* compute the string of the type dependent on whether or not
+           * it has traits. If it has traits, it will be a string like
+           *
+           *   <a: Showable + Iterable[b]>
+           *
+           * if it doesn't, it'll just be something like `a`
+           *
+           * traits are memoized and only used right before return, so
+           * types look something like
+           *
+           *   <a: Showable> => Function[a, String]
+           *)
+          begin match trait with
+          | Some trait ->
+            BatHashtbl.add id_to_traits newid (string_of_trait trait)
+          | None -> ()
+          end;
+
+          BatHashtbl.add id_to_char id newid;
           newid
         end
 
-    | TyVar {contents = Unbound (id, _)} ->
+    | TyVar {contents = Unbound (id, _, None)} ->
         "_" ^ id
+    | TyVar {contents = Unbound (id, _, Some trait)} ->
+        begin try
+          BatHashtbl.find id_to_char id
+        with Not_found ->
+          BatHashtbl.add id_to_traits id (string_of_trait trait);
+          BatHashtbl.add id_to_char id ("_" ^ id);
+          "_" ^ id
+        end
 
     | TyVar {contents = Link ty} ->
         recurse ty
@@ -176,13 +209,27 @@ let rec string_of_type ty =
 				begin match real_ty ty1 with
 					| TyFold (_, ty1) ->
             recurse (Lazy.force ty1)
-          | _ ->
+          | ty1 ->
             Error.implementation_error
-              "Type.string_of_type: TyUnfold on non-TyFold"
+              "Type.string_of_type: TyUnfold on non-TyFold: " ^ (string_of_type ty1)
         end
 
   in
-  recurse ~toplevel:true ty
+  let ty_str = recurse ~toplevel:true ty in
+  let trait_bindings = BatHashtbl.bindings id_to_traits in
+  if trait_bindings = [] then
+    ty_str
+  else
+    let trait_strings =
+      List.map (fun (id, traits) -> id ^ ": " ^ traits) trait_bindings
+    in
+    let traits = "<" ^ (String.concat ", " trait_strings) ^ ">" in
+    traits ^ " => " ^ ty_str
+
+and string_of_trait trait =
+  let (name, params, _) = trait in
+  let param_strs = List.map string_of_type !params in
+  "(" ^ !name ^ ")[" ^ (String.concat ", " param_strs) ^ "]"
 
 
 (* errors if occurs check fails, otherwise returns unit *)
@@ -191,12 +238,18 @@ let rec occurs loc tyvar_id tyvar_level ty =
 
   match ty with
     | TyVar {contents = Generic _} -> assert false
-    | TyVar ({contents = Unbound(tyvar_id2, tyvar_level2)} as tyvar2) ->
+    | TyVar ({contents = Unbound (tyvar_id2, tyvar_level2, trait)} as tyvar2) ->
+      begin match trait with
+      | Some (_, params, _) ->
+          List.iter recurse !params
+      | None -> ()
+      end;
+
       if tyvar_id = tyvar_id2 then
         Error.type_error loc "recursive types"
       else
         if tyvar_level2 > tyvar_level then
-          tyvar2 := Unbound(tyvar_id2, tyvar_level)
+          tyvar2 := Unbound (tyvar_id2, tyvar_level, trait)
     | TyVar {contents = Link ty} ->
         recurse ty
 
@@ -230,13 +283,13 @@ let rec occurs loc tyvar_id tyvar_level ty =
         failwith "Type.occurs on bare TyUnfold"
 
 let rec fresh_counter = ref 0
-and fresh_tyvar level _ =
+and fresh_tyvar level ?(trait=None) _ =
   incr fresh_counter;
-  TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level)}
+  TyVar {contents = Unbound ("t" ^ string_of_int !fresh_counter, level, trait)}
 
 and fresh_gen_tyvar _ =
   incr fresh_counter;
-  TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter)}
+  TyVar {contents = Generic ("t" ^ string_of_int !fresh_counter, None)}
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
 (* initialized in basis.ml *)
@@ -246,8 +299,8 @@ let list_ty = ref (TyCon ("FakeList", []))
 let list_of_ty = ref (fun _ -> TyCon ("FakeList", []))
 
 
-let gen_var_ty = TyVar {contents = Generic "a"}
-let gen_var_ty2 = TyVar {contents = Generic "b"}
+let gen_var_ty = TyVar {contents = Generic ("a", None)}
+let gen_var_ty2 = TyVar {contents = Generic ("b", None)}
 
 let prim_int_ty = TyCon ("int", [])
 let prim_string_ty = TyCon ("string", [])
@@ -339,12 +392,56 @@ let rec unify loc ty1 ty2 =
     | ty1, TyVar {contents = Link ty2} ->
         unify ty1 ty2
 
-    | TyVar ({contents = Unbound (tyvar_id, tyvar_level)} as ty_ref), ty
-    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level)} as ty_ref) ->
+    (* non-trait bounded type variable *)
+    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref), ty
+    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref) ->
         (* TODO: maybe catch the MythError and raise an error specific to
          * the two types `ty1` and `ty2`? *)
         occurs loc tyvar_id tyvar_level ty;
         ty_ref := Link ty
+
+    (* unifying two trait bounded type variables *)
+    | TyVar ({contents = Unbound (id1, level1, Some trait1)} as ty_ref1),
+      TyVar {contents = Unbound (id2, level2, Some trait2)} ->
+
+        let (name1, params1, record_ty1) = trait1 in
+        let (name2, params2, record_ty2) = trait2 in
+
+        List.iter (occurs loc id1 level1) !params2;
+        List.iter (occurs loc id2 level2) !params1;
+
+        (* eliminate ty_ref1. Do this before recursive call so that recursive
+         * structures hopefully don't infinite loop. Recursive usage of a
+         * type variable will have been replaced already, I hope *)
+        ty_ref1 := Link ty2;
+        unify (Lazy.force record_ty1) (Lazy.force record_ty2);
+
+        (* TODO: set both names equal.
+         * Might just need to change one of them? *)
+        let new_name = !name1 ^ " + " ^ !name2 in
+        name1 := new_name;
+        name2 := new_name;
+
+        let new_params = !params1 @ !params2 in
+        params1 := new_params;
+        params2 := new_params
+
+    (* unifying a trait bounded type variable with a non-type variable *)
+    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), ty
+    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
+
+        let (name, params, record_ty) = trait in
+
+        (* eliminate tye type variable. Do this before recursive call so that
+         * recursive structures hopefully don't infinite loop. Recursive usage
+         * of a type variable will have been replaced already, I hope. *)
+        occurs loc tyvar_id tyvar_level ty;
+        ty_ref := Link ty;
+
+        (* make sure `ty` conforms to the trait contents *)
+        unify (Lazy.force record_ty) ty
+
+        (* TODO : trait no longer exists, do we need to do anything to it? *)
 
     | TyFun (ty_params1, ty_ret1), TyFun (ty_params2, ty_ret2) ->
         (* TODO : improve this error... it's often just a simple
@@ -377,15 +474,24 @@ let rec unify loc ty1 ty2 =
     | TyFold (None, ty1), TyFold (None, ty2) ->
         unify (Lazy.force ty1) (Lazy.force ty2)
 
+    (* useful when unifying something like
+     *
+     *    Unfold(_t1) = Unfold(Fold({...}))
+     *
+     * so, when we have a unfolded type variable.
+     *)
+    | TyUnfold (ty1), TyUnfold (ty2) ->
+        unify ty1 ty2
+
     | TyUnfold (ty1), ty2
     | ty2, TyUnfold (ty1) ->
 				begin match real_ty ty1 with
 					| TyFold (_, ty1) ->
             unify (Lazy.force ty1) ty2
-          | _ ->
+          | ty1 ->
             Error.implementation_error
               ~loc: loc
-              "Type.unify: TyUnfold on non-TyFold"
+              ("Type.unify: TyUnfold on non-TyFold: " ^ (string_of_type ty1))
         end
 
     | TyFold (Some (name1, params1), _), TyCon (name2, params2)
@@ -443,7 +549,8 @@ and unify_rows loc tyrow1 tyrow2 =
 							(* will result in an error *)
 							unify loc rest_ty1 (TyRowExtend (missing1, fresh_tyvar 0 ()))
 
-					| TyVar ({contents = Unbound (_, level)} as ty_ref) ->
+          (* trait is always None since this is an extend type *)
+					| TyVar ({contents = Unbound (_, level, None)} as ty_ref) ->
 							let new_rest_row_var = fresh_tyvar level () in
 							unify loc rest_ty2 (TyRowExtend (missing2, new_rest_row_var));
 							begin match !ty_ref with
@@ -451,6 +558,9 @@ and unify_rows loc tyrow1 tyrow2 =
 								| _ -> ()
               end;
 							unify loc rest_ty1 (TyRowExtend (missing1, new_rest_row_var))
+
+					| TyVar {contents = Unbound (_, level, _)} ->
+             failwith "Type.unify_rows extend tyvar has non-None trait"
 
 					| _ -> assert false
         end
@@ -466,8 +576,20 @@ and pairwise_unify loc tys = match tys with
 (* -------------------- GENERALIZATION & INSTANTIATION -------------------- *)
 let rec generalize level ty =
   match ty with
-  | TyVar {contents = Unbound(tyvar_id, tyvar_level)} when tyvar_level > level ->
-			TyVar (ref (Generic tyvar_id))
+  | TyVar {contents = Unbound (tyvar_id, tyvar_level, None)}
+    when tyvar_level > level ->
+      TyVar (ref (Generic (tyvar_id, None)))
+
+  | TyVar {contents = Unbound (tyvar_id, tyvar_level, Some trait)}
+    when tyvar_level > level ->
+      let (name, params, record_ty) = trait in
+      let name = !name in
+      let params = List.map (generalize level) !params in
+      let record_ty = lazy (generalize level (Lazy.force record_ty)) in
+
+      let trait = (ref name, ref params, record_ty) in
+      TyVar (ref (Generic (tyvar_id, Some trait)))
+
 	| TyVar {contents = Link ty} -> generalize level ty
 
 	| TyCon (name, param_tys) ->
@@ -500,7 +622,7 @@ let rec instantiate level ty =
 	let generic_to_unbound = Hashtbl.create 100 in
   let rec recurse = function
 		| TyVar {contents = Link ty} -> recurse ty
-		| TyVar {contents = Generic gen_id} ->
+		| TyVar {contents = Generic (gen_id, None)} ->
 				begin try
 					Hashtbl.find generic_to_unbound gen_id
 				with Not_found ->
@@ -508,6 +630,22 @@ let rec instantiate level ty =
 					Hashtbl.add generic_to_unbound gen_id tyvar;
 					tyvar
         end
+
+		| TyVar {contents = Generic (gen_id, Some trait)} ->
+        begin try
+					Hashtbl.find generic_to_unbound gen_id
+				with Not_found ->
+          let (name, params, record_ty) = trait in
+          let name = !name in
+          let params = List.map recurse !params in
+          let record_ty = lazy (recurse (Lazy.force record_ty)) in
+          let trait = (ref name, ref params, record_ty) in
+
+          let tyvar = fresh_tyvar level ~trait:(Some trait) () in
+					Hashtbl.add generic_to_unbound gen_id tyvar;
+					tyvar
+        end
+
 		| TyVar {contents = Unbound _} as ty -> ty
 
 		| TyCon (name, param_tys) ->

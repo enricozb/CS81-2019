@@ -8,21 +8,24 @@ type ty =
   | TyRecord of tyrow
 	| TyRowEmpty
 	| TyRowExtend of ty Ast.NameMap.t * tyrow
-  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types, namely classes *)
+  | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types *)
   | TyUnfold of ty
 
 and tyvar =
   | Link of ty
-  | Unbound of id * level
-  | Generic of id
+  | Unbound of id * level * (trait option)
+  | Generic of id * (trait option)
 
-and tyrow = ty  (* kind of rows should only be TyRowEmpty or TyRowExtend *)
-
-type kind =
+and kind =
   | KindFun of kind_fun
   | KindVar of ty
 
 and kind_fun = (ty list) -> ty
+
+(* a mutable TyFold *)
+and trait = (string ref) * ((ty list) ref) * (ty Lazy.t)
+
+and tyrow = ty (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
 val kind_fun_0 : ty -> kind_fun
 val kind_fun_1 : (ty -> ty) -> kind_fun
