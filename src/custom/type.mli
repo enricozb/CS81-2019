@@ -50,17 +50,19 @@ val string_ty : ty ref
 val list_of_ty : (ty -> ty) ref
 val list_ty : ty ref
 
+(* convenience types *)
 val gen_var_ty : ty
 val gen_var_ty2 : ty
 val none_ty : ty
 val bool_ty : ty
 val prim_fun_ty : ty list -> ty -> ty
 val fun_ty : ty list -> ty -> ty
-val callable_ty : ?level:level -> ?generic:bool -> ty list -> ty -> ty
-val has_field_ty : ?level:level -> ?generic:bool -> string -> ty -> ty
 val bare_record_ty : (string * ty) list -> ty
 val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty
 
+(* convenience traits *)
+val has_field_trait : ?level:level -> string -> ty -> ty
+val callable_trait : ?level:level -> ty list -> ty -> ty
 
 val typecheck : ?level:level ->
   envs -> Ast.ast ->             (* the ast to typecheck *)

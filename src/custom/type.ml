@@ -113,6 +113,11 @@ let rec string_of_type ty =
   let rec recurse_tys tys =
     String.concat ", " (List.map (recurse ~toplevel:false) tys)
 
+  and string_of_trait trait =
+    let (name, params, _) = trait in
+    let param_strs = List.map recurse !params in
+    "(" ^ !name ^ ")[" ^ (String.concat ", " param_strs) ^ "]"
+
   and recurse ?(toplevel=false) ty =
     match ty with
     | TyVar {contents = Generic (id, trait)} ->
@@ -226,10 +231,6 @@ let rec string_of_type ty =
     let traits = "<" ^ (String.concat ", " trait_strings) ^ ">" in
     traits ^ " => " ^ ty_str
 
-and string_of_trait trait =
-  let (name, params, _) = trait in
-  let param_strs = List.map string_of_type !params in
-  "(" ^ !name ^ ")[" ^ (String.concat ", " param_strs) ^ "]"
 
 
 (* errors if occurs check fails, otherwise returns unit *)
@@ -352,28 +353,27 @@ and fun_ty param_tys ret_ty =
   in
   func_type
 
-let callable_ty ?(level=0) ?(generic=false) param_tys ret_ty =
-  let fun_ty = fun_ty param_tys ret_ty in
-  TyFold (Some ("Callable", param_tys @ [ret_ty]), lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton "__call__" fun_ty,
-      if generic then
-        fresh_gen_tyvar ()
-      else
+let callable_trait ?(level=0) param_tys ret_ty =
+  let record_ty = lazy (TyRecord (
+      TyRowExtend (
+        Ast.NameMap.singleton "__call__" (fun_ty param_tys ret_ty),
         fresh_tyvar level ()
-    )
-  )))
+      )
+    ))
+  in
+  let trait = (ref "Callable", ref (param_tys @ [ret_ty]), record_ty) in
+  fresh_tyvar level ~trait:(Some trait) ()
 
-let has_field_ty ?(level=0) ?(generic=false) field ty =
-  TyFold (None, lazy (TyRecord (
-    TyRowExtend (
-      Ast.NameMap.singleton field ty,
-      if generic then
-        fresh_gen_tyvar ()
-      else
+let has_field_trait ?(level=0) field field_ty =
+  let record_ty = lazy (TyRecord (
+      TyRowExtend (
+        Ast.NameMap.singleton field field_ty,
         fresh_tyvar level ()
-    )
-  )))
+      )
+    ))
+  in
+  let trait = (ref ("{" ^ field ^ "}"), ref [field_ty], record_ty) in
+  fresh_tyvar level ~trait:(Some trait) ()
 
 (* ------------------------------ UNIFICATION ------------------------------ *)
 let rec unify loc ty1 ty2 =
@@ -427,8 +427,10 @@ let rec unify loc ty1 ty2 =
         params2 := new_params
 
     (* unifying a trait bounded type variable with a non-type variable *)
-    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), ty
-    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
+    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), TyFold (_, ty)
+    | TyFold (_, ty), TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
+
+        let ty = Lazy.force ty in
 
         let (name, params, record_ty) = trait in
 
@@ -824,13 +826,11 @@ and infer level envs ast = match ast with
       else
         TyFold (None, lazy (TyRecord (TyRowExtend (name_ty_map, TyRowEmpty))))
 
-  | Ast.Field (l, ast, name) ->
-      let rest_ty = fresh_tyvar level () in
+  | Ast.Field (l, ast, field_name) ->
       let field_ty = fresh_tyvar level () in
-      let record_ty = TyUnfold (TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))))
-      in
-      unify l record_ty (TyUnfold (infer level envs ast));
+      let record_ty = has_field_trait ~level:level field_name field_ty in
+
+      unify l (TyUnfold record_ty) (TyUnfold (infer level envs ast));
       field_ty
 
   | Ast.Lambda (l, params, ast) ->
@@ -870,7 +870,7 @@ and infer level envs ast = match ast with
       let ret_ty = fresh_tyvar level () in
 
       (* equate type of function with (param_tys -> ret_ty) *)
-      unify l t1 (callable_ty ~level:level param_tys ret_ty);
+      unify l t1 (callable_trait ~level:level param_tys ret_ty);
       ret_ty
 
   | Ast.Bind (l, mut, id, ast) ->
@@ -892,16 +892,13 @@ and infer level envs ast = match ast with
       unify l ast_ty (Env.lookup l id envs.ty_env);
       ast_ty
 
-  | Ast.SetField (l, ast1, name, ast2) ->
-      let rest_ty = fresh_tyvar level () in
+  | Ast.SetField (l, ast1, field_name, ast2) ->
       let field_ty = fresh_tyvar level () in
-      let record_ty = TyUnfold (TyFold (None, lazy (TyRecord
-        (TyRowExtend (Ast.NameMap.singleton name field_ty, rest_ty)))))
-      in
+      let record_ty = has_field_trait ~level:level field_name field_ty in
       let ast1_ty = infer level envs ast1 in
       let ast2_ty = infer level envs ast2 in
 
-      unify l record_ty (TyUnfold ast1_ty);
+      unify l (TyUnfold record_ty) (TyUnfold ast1_ty);
       unify l field_ty ast2_ty;
 
       ast2_ty
