@@ -270,6 +270,11 @@ while_stmt:
   }
 
 funcdef:
+  | DEF LPAREN OPERATOR RPAREN name_list ret_ty COLON suite {
+    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8),
+             snd $3, snd $5, $6, $8)
+  }
+
   | DEF NAME name_list ret_ty COLON suite {
     if not (starts_with_lower (snd $2)) then
       failwith "Functions must start with a lower-case letter"

@@ -4,18 +4,18 @@ type name = string
 
 (* to guarantee lexicographical ordering *)
 let compare_names name1 name2 =
-	let compare_length = compare (String.length name1) (String.length name2) in
-	if compare_length = 0 then
-		String.compare name1 name2
+  let compare_length = compare (String.length name1) (String.length name2) in
+  if compare_length = 0 then
+    String.compare name1 name2
   else
     compare_length
 
 
 module NameMap = Map.Make(
-	struct
-		type t = name
-		let compare = compare_names
-	end)
+  struct
+    type t = name
+    let compare = compare_names
+  end)
 
 type ty =
   | TyVar of Loc.loc * name

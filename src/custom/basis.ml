@@ -71,44 +71,6 @@ let ternary_fun ty1 ty2 ty3 f = Object.callable_object (lazy (
   )
 ))
 
-(* ------------------------------- Operators ------------------------------- *)
-let operator_ty field =
-  Type.callable_ty ~generic:true
-  [(Type.has_field_ty ~generic:true
-      field
-      (Type.callable_ty ~generic:true [Type.gen_var_ty] Type.gen_var_ty2)
-   );
-   Type.gen_var_ty]
-  Type.gen_var_ty2
-
-let operator_func field =
-  binary_fun
-  (Type.has_field_ty ~generic:true
-    field
-    (Type.callable_ty ~generic:true [Type.gen_var_ty] Type.gen_var_ty2)
-  )
-  Type.gen_var_ty
-  (fun obj b ->
-      let f =
-        Object.get_func_from_callable (Object.get_object_field obj field)
-      in
-      call_prim_func f [b])
-
-let operator field = (operator_ty field, operator_func field)
-
-let add_ty, add = operator "__add__"
-let sub_ty, sub = operator "__sub__"
-let mul_ty, mul = operator "__mul__"
-let div_ty, div = operator "__div__"
-let pow_ty, pow = operator "__pow__"
-
-let eq_ty, eq = operator "__eq__"
-let neq_ty, neq = operator "__neq__"
-let le_ty, le = operator "__le__"
-let lt_ty, lt = operator "__lt__"
-let ge_ty, ge = operator "__ge__"
-let gt_ty, gt = operator "__gt__"
-
 
 (* -------------------------------- Classes -------------------------------- *)
 (* binds obj to the first parameter of func. Used when creating an instance
@@ -617,19 +579,6 @@ let val_env = Env.bind_pairs
    (*("and", bool_bool_to_bool (&&));*)
    (*("or", bool_bool_to_bool (||));*)
 
-   ("+", add);
-   ("-", sub);
-   ("*", mul);
-   ("/", div);
-   ("^", pow);
-
-   ("==", eq);
-   ("!=", neq);
-   ("<=", le);
-   ("<",  lt);
-   (">=", ge);
-   (">",  gt);
-
    ("false", Value.Bool false);
    ("true", Value.Bool true);
    ("none", Value.None);
@@ -650,19 +599,6 @@ let ty_env = Env.bind_pairs
   [
    (*("and", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
    (*("or", Type.fun_ty [Type.bool_ty; Type.bool_ty] Type.bool_ty);*)
-
-   ("+", add_ty);
-   ("-", sub_ty);
-   ("*", mul_ty);
-   ("/", div_ty);
-   ("^", pow_ty);
-
-   ("==", eq_ty);
-   ("!=",  neq_ty);
-   ("<=", le_ty);
-   ("<",  lt_ty);
-   (">=", ge_ty);
-   (">",  gt_ty);
 
    ("false", Type.bool_ty);
    ("true", Type.bool_ty);
@@ -703,5 +639,27 @@ def print(x):
   __print_string__(repr(x))
 "
 
-let basis = ""
+let basis = "
+def (+)(x, y):
+  x.__add__(y)
+
+def (-)(x, y):
+  x.__sub__(y)
+
+def (*)(x, y):
+  x.__mul__(y)
+
+def (/)(x, y):
+  x.__div__(y)
+
+def (^)(x, y):
+  x.__pow__(y)
+"
+
+(*let eq_ty, eq = operator "__eq__"*)
+(*let neq_ty, neq = operator "__neq__"*)
+(*let le_ty, le = operator "__le__"*)
+(*let lt_ty, lt = operator "__lt__"*)
+(*let ge_ty, ge = operator "__ge__"*)
+(*let gt_ty, gt = operator "__gt__"*)
 
