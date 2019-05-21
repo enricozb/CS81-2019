@@ -19,8 +19,10 @@ and tyvar =
 and kind =
   | KindFun of kind_fun
   | KindVar of ty
+  | KindTrait of kind_trait
 
 and kind_fun = (ty list) -> ty
+and kind_trait = level -> ty -> (ty list) -> ty
 
 (* a mutable TyFold *)
 and trait = (string ref) * ((ty list) ref) * (ty Lazy.t)
@@ -60,9 +62,12 @@ val fun_ty : ty list -> ty -> ty
 val bare_record_ty : (string * ty) list -> ty
 val folded_record_ty : ((id * (ty list)) option) -> (string * ty) list -> ty
 
+val extensible_field_ty : ?level:level -> ?generic:bool -> string -> ty -> ty
+
 (* convenience traits *)
-val has_field_trait : ?level:level -> string -> ty -> ty
-val callable_trait : ?level:level -> ty list -> ty -> ty
+(* TODO: i don't think `generic` is needed here *)
+val has_field_trait : ?level:level -> ?generic:bool -> string -> ty -> ty
+val callable_trait : ?level:level -> ?generic:bool -> ty list -> ty -> ty
 
 val typecheck : ?level:level ->
   envs -> Ast.ast ->             (* the ast to typecheck *)

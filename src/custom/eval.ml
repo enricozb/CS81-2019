@@ -68,7 +68,7 @@ and reduce_ast val_env frames = function
   | Ast.SetField (l, ast1, field, ast2) ->
       (Ast ast1, val_env, Frame.SetField (l, None, field, Some ast2) :: frames)
 
-  | Ast.Def (l, name, params, _, suite) ->
+  | Ast.Def (l, name, _, params, _, suite) ->
       let params = List.map fst params in
       let rec closure () = Env.bind name (func_obj ()) val_env
       and func_obj = fun () ->

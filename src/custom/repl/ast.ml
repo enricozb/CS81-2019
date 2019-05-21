@@ -37,7 +37,7 @@ type ast =
   | While of (Loc.loc * ast * (ast list))
   | Break of Loc.loc
   | Continue of Loc.loc
-  | Def of (Loc.loc * name * param_list * (ty option) * (ast list))
+  | Def of (Loc.loc * name * trait_bounds * param_list * (ty option) * (ast list))
   | Return of (Loc.loc * ast)
   | Class of (Loc.loc * name * (ast list))
   | Suite of (Loc.loc * (ast list)) (* used only outside of parser *)
@@ -48,6 +48,8 @@ type ast =
   | CheckTypeError of (Loc.loc * ast)
 
 and param_list = (name * (ty option)) list
+and trait_bounds = (ty * ty) list (* <a: Showable, b: Iterable[a]> *)
+                                  (* this will be a TyVar * ty list *)
 
 let rec string_of_str_list lst sep =
   let rec iter = function
@@ -114,7 +116,8 @@ and string_of_ast = function
   | Assign (_, name, expr) ->
       name ^ " = " ^ string_of_ast expr
 
-  | Def (_, funcname, params, _, stmts) ->
+  (* TODO: add traits *)
+  | Def (_, funcname, _, params, _, stmts) ->
       let params = List.map fst params in
       "def " ^ funcname ^ "(" ^ string_of_str_list params ", " ^ "): ..."
 
@@ -159,7 +162,7 @@ let loc_of_ast = function
   | Continue l
   | Assign (l, _, _)
   | Bind (l, _, _, _)
-  | Def (l, _, _, _, _)
+  | Def (l, _, _, _, _, _)
   | Return (l, _)
   | Class (l, _, _)
   | Suite (l, _)
@@ -200,11 +203,11 @@ let is_expr = function
 
 let rec class_split_suite = function
   | [] -> ([], [])
-  | (Def (_, _, ("self", _) :: _, _, _) as def) :: rest ->
+  | (Def (_, _, _, ("self", _) :: _, _, _) as def) :: rest ->
       let instance_funcs, class_funcs = class_split_suite rest in
       (def :: instance_funcs, class_funcs)
 
-  | (Def (_, _, _, _, _) as def) :: rest ->
+  | (Def (_, _, _, _, _, _) as def) :: rest ->
       let instance_funcs, class_funcs = class_split_suite rest in
       (instance_funcs, def :: class_funcs)
   | _ -> failwith "Ast.class_split_suite contains non defs"

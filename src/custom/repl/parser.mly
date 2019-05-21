@@ -270,17 +270,17 @@ while_stmt:
   }
 
 funcdef:
-  | DEF LPAREN OPERATOR RPAREN name_list ret_ty COLON suite {
-    Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $8),
-             snd $3, snd $5, $6, $8)
-  }
-
-  | DEF NAME name_list ret_ty COLON suite {
+  | DEF NAME trait_list name_list ret_ty COLON suite {
     if not (starts_with_lower (snd $2)) then
       failwith "Functions must start with a lower-case letter"
     else
-      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $6),
-               snd $2, snd $3, $4, $6)
+      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $7),
+               snd $2, $3, snd $4, $5, $7)
+  }
+
+  | DEF LPAREN OPERATOR RPAREN trait_list name_list ret_ty COLON suite {
+      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $9),
+               snd $3, $5, snd $6, $7, $9)
   }
 
 ret_ty:
@@ -294,6 +294,26 @@ classdef:
     else
       let l = Loc.span $1 (Ast.loc_of_ast_list $4) in
       Ast.Class (l, snd $2, $4)
+  }
+
+trait_list:
+  | { [] }
+  | LANGLE RANGLE { [] }
+  | LANGLE trait_list_inner RANGLE { $2 }
+
+trait_list_inner:
+  | NAME COLON ty                       {
+    if not (starts_with_lower (snd $1)) then
+      failwith "Type variables must be lowercase"
+    else
+      [(Ast.TyVar (fst $1, snd $1), $3)]
+  }
+  | NAME COLON ty COMMA trait_list_inner {
+    if not (starts_with_lower (snd $1)) then
+      failwith "Type variables must be lowercase"
+    else
+      (Ast.TyVar (fst $1, snd $1), $3) :: $5
+
   }
 
 name_list:
