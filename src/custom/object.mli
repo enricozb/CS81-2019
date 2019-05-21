@@ -8,8 +8,10 @@ val get_fields : Value.value -> string list
 
 val base_object : unit -> Value.value
 val callable_object : ?name:(string option) -> Value.value Lazy.t -> Value.value
+val is_callable : Value.value -> bool
 
 (* initialized in basis.ml *)
+val function_class : (unit -> Value.value) ref
 val make_int : (Z.t -> Value.value) ref
 val make_string : (string -> Value.value) ref
 val make_list : (Value.value list -> Value.value) ref

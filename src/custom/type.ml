@@ -313,6 +313,7 @@ and make_tyvar level generic ?(trait=None) () =
 
 (* ----------------------------- COMMON TYPES ----------------------------- *)
 (* initialized in basis.ml *)
+let function_class_ty = ref (TyCon ("FakeFunctionClass", []))
 let int_ty = ref (TyCon ("FakeInt", []))
 let string_ty = ref (TyCon ("FakeString", []))
 let list_ty = ref (TyCon ("FakeList", []))
@@ -331,13 +332,7 @@ let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 
-let rec base_record_fields () =
-    List.fold_left
-      (fun name_ty_map (name, ty) ->
-        Ast.NameMap.add name ty name_ty_map)
-    Ast.NameMap.empty [
-      ("__repr__", fun_ty [] !string_ty);
-    ]
+let rec base_record_fields () = Ast.NameMap.empty
 
 and bare_record_ty name_ty_list =
   TyRecord (
@@ -364,6 +359,8 @@ and folded_record_ty tycon name_ty_list =
 and fun_ty param_tys ret_ty =
   let prim_fun_ty = prim_fun_ty param_tys ret_ty in
   let rec inner_record = lazy (bare_record_ty [
+    ("__name__", !string_ty);
+    ("__class__", !function_class_ty);
     ("__call__", func_type);
     ("~~call~~", prim_fun_ty)
   ])

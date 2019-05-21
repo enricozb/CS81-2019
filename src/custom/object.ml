@@ -1,4 +1,8 @@
+(* used here for callable construction *)
+let function_class = ref (fun () -> failwith "Object.function_class uninitialized")
+
 (* -------------------- Convenience Object Constructors -------------------- *)
+(* these are initialized in basis.ml *)
 let make_int = ref (fun _ -> failwith "Object.make_int uninitialized")
 let make_string = ref (fun _ -> failwith "Object.make_string uninitialized")
 let make_list = ref (fun _ -> failwith "Object.make_string uninitialized")
@@ -40,13 +44,21 @@ let get_fields obj =
 let get_func_from_callable callable =
   get_object_field (get_object_field callable "__call__") "~~call~~"
 
+let is_callable obj =
+  match get_object_field_option obj "__call__" with
+  | None -> false
+  | Some obj ->
+    begin match get_object_field_option obj "~~call~~" with
+    | None -> false
+    | Some (Value.Lambda _)
+    | Some (Value.Builtin _) -> true
+    | _ ->
+        failwith "Object has ~~call~~ but isn't Value.Lambda nor Value.Builtin"
+    end
 
 (* ------------------------- Constructing Objects ------------------------- *)
 
-let rec base_object () = Value.Object (
-  (BatHashtbl.of_list [
-    ("__repr__", (lazy (zero_ary_fun (fun () -> !make_string "<object>"))))
-  ]))
+let rec base_object () = Value.Object (BatHashtbl.create 0)
 
 (* TODO: depend on base_object *)
 and build_object fields = Value.Object (BatHashtbl.of_list fields)
@@ -55,14 +67,11 @@ and callable_object ?(name=None) prim_func =
   let rec obj = base_object () in
   set_object_field obj "__call__" (lazy obj);
   set_object_field obj "~~call~~" prim_func;
-  let repr =
-    match name with
-    | None ->
-        (lazy (zero_ary_fun (fun () -> !make_string "<function>")))
-    | Some name ->
-        (lazy (zero_ary_fun (fun () -> !make_string ("<function " ^ name ^ ">"))))
-  in
-  set_object_field obj "__repr__" repr;
+  begin match name with
+    | None -> set_object_field obj "__name__" (lazy (!make_string ""))
+    | Some name -> set_object_field obj "__name__" (lazy (!make_string name))
+  end;
+  set_object_field obj "__class__" (lazy (!function_class ()));
   obj
 
 and zero_ary_fun f = callable_object (lazy (
@@ -76,6 +85,3 @@ and zero_ary_fun f = callable_object (lazy (
           ~provided: (List.length vals)
   )
 ))
-
-
-

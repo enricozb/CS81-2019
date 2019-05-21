@@ -95,7 +95,27 @@ let instance_def obj field func =
   let value = (lazy (bind_self (Lazy.force func) obj)) in
   Object.set_object_field obj field value
 
-let rec int_ty =
+(*let rec type_class_ty =*)
+  (*let rec inner_record = lazy (Type.bare_record_ty*)
+    (*[*)
+     (*("__repr__", Type.fun_ty [class_ty] string_ty);*)
+    (*])*)
+  (*and type_class_ty = Type.TyFold (Some ("TypeClass", []), inner_record)*)
+  (*in*)
+  (*type_class_ty*)
+
+(* TODO: __repr__ should not take any type... It should take Function[*]
+ * I could just take anything that provides a `name` field.
+ *)
+let rec function_class_ty =
+  let rec inner_record = lazy (Type.bare_record_ty
+    [("__repr__", Type.fun_ty [Type.gen_var_ty] string_ty)]
+  )
+  and function_class_ty = Type.TyFold (Some ("FunctionClass", []), inner_record)
+  in
+  function_class_ty
+
+and int_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
   let rec inner_record = lazy (Type.bare_record_ty
     [("val", Type.prim_int_ty);
@@ -120,7 +140,7 @@ let rec int_ty =
   int_ty
 
 and int_class_ty =
-let rec inner_record = lazy (Type.bare_record_ty
+  let rec inner_record = lazy (Type.bare_record_ty
     [("__call__", Type.fun_ty [Type.prim_int_ty] int_ty);
      ("__add__", Type.fun_ty [int_ty; int_ty] int_ty);
      ("__sub__", Type.fun_ty [int_ty; int_ty] int_ty);
@@ -144,6 +164,26 @@ let rec inner_record = lazy (Type.bare_record_ty
   in
   int_class_ty
 
+and string_class_ty =
+  let rec inner_record = lazy (Type.bare_record_ty
+    [("__call__", Type.fun_ty [Type.prim_string_ty] string_ty);
+     ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
+
+     ("__eq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__neq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__le__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__lt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__ge__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+     ("__gt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
+
+     ("__getitem__", Type.fun_ty [string_ty; int_ty] string_ty);
+     ("__len__", Type.fun_ty [string_ty] int_ty);
+     ("__repr__", Type.fun_ty [string_ty] string_ty);
+    ])
+  and string_class_ty = Type.TyFold (Some ("StringClass", []), inner_record)
+  in
+  string_class_ty
+
 and string_ty =
   (* needs to be lazy to appease OCaml's restriction on let rec values *)
   let rec inner_record = lazy (Type.bare_record_ty
@@ -160,6 +200,7 @@ and string_ty =
      ("__getitem__", Type.fun_ty [int_ty] string_ty);
      ("__len__", Type.fun_ty [] int_ty);
      ("__repr__", Type.fun_ty [] string_ty);
+     ("__class__", string_class_ty);
     ])
   and string_ty = Type.TyFold (Some ("String", []), inner_record)
   in
@@ -182,10 +223,37 @@ and list_of_ty ty =
 
 let list_ty = list_of_ty Type.gen_var_ty
 let _ =
+  Type.function_class_ty := function_class_ty;
   Type.int_ty := int_ty;
   Type.string_ty := string_ty;
   Type.list_of_ty := list_of_ty;
   Type.list_ty := list_ty
+
+(* ------------------------------- Function ------------------------------- *)
+let function_class =
+  let function_repr = lazy (
+    unary_fun
+      Type.gen_var_ty
+      (fun a ->
+        let name = Object.get_object_field a "__name__" in
+        let str = Object.get_object_field name "val" in
+        match str with
+        | Value.String "" ->
+          !Object.make_string "<lambda>"
+        | Value.String name ->
+          !Object.make_string ("<function '" ^ name ^ "'>")
+        | _ -> failwith "Runtime type error"
+      )
+  )
+  in
+
+  Object.build_object
+    [
+      ("__repr__", function_repr);
+    ]
+
+let () =
+  Object.function_class := (fun () -> function_class)
 
 (* ---------------------------------- Int ---------------------------------- *)
 
@@ -208,7 +276,6 @@ let rec int_class = lazy (
     instance_def obj "__repr__" int_repr;
 
     Object.set_object_field obj "__class__" int_class;
-
     obj
   and int_op f =
     binary_fun
@@ -294,27 +361,7 @@ let rec int_class = lazy (
 )
 
 (* -------------------------------- String -------------------------------- *)
-let string_class_ty =
-  let rec inner_record = lazy (Type.bare_record_ty
-    [("__call__", Type.fun_ty [Type.prim_string_ty] string_ty);
-     ("__add__", Type.fun_ty [string_ty; string_ty] string_ty);
-
-     ("__eq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-     ("__neq__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-     ("__le__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-     ("__lt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-     ("__ge__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-     ("__gt__", Type.fun_ty [string_ty; string_ty] Type.bool_ty);
-
-     ("__getitem__", Type.fun_ty [string_ty; int_ty] string_ty);
-     ("__len__", Type.fun_ty [string_ty] int_ty);
-     ("__repr__", Type.fun_ty [string_ty] string_ty);
-    ])
-  and string_class_ty = Type.TyFold (Some ("StringClass", []), inner_record)
-  in
-  string_class_ty
-
-let string_class =
+let rec string_class = lazy(
   let rec string_uninitialized_object () =
     let obj = Object.build_object [("val", lazy (Value.String ""))] in
     instance_def obj "__add__" string_add;
@@ -328,6 +375,8 @@ let string_class =
     instance_def obj "__getitem__" string_getitem;
     instance_def obj "__len__"  string_len;
     instance_def obj "__repr__" string_repr;
+
+    Object.set_object_field obj "__class__" string_class;
     obj
   and string_op f =
     binary_fun
@@ -425,6 +474,7 @@ let string_class =
      ("__getitem__", string_getitem);
      ("__repr__", string_repr);
     ]
+)
 
 
 (* -------------------------------- List[a] -------------------------------- *)
@@ -583,12 +633,7 @@ let callable =
   unary_fun
     Type.gen_var_ty
     (fun value -> match value with
-      | Value.Object _ ->
-        begin match Object.get_object_field_option value "__call__" with
-        | Some (Value.Builtin _)
-        | Some (Value.Lambda _) -> Value.Bool true
-        | _ -> Value.Bool false
-        end
+      | Value.Object _ -> Value.Bool (Object.is_callable value)
       | _ -> Value.Bool false
     )
 
@@ -618,7 +663,7 @@ let val_env = Env.bind_pairs
    ("dir", dir);
 
    ("Int", Lazy.force int_class);
-   ("String", string_class);
+   ("String", Lazy.force string_class);
    ("List", list_class);
   ]) Env.empty
 
@@ -683,6 +728,18 @@ def (/)(x, y):
 
 def (^)(x, y):
   return x.__pow__(y)
+
+def (<=)(x, y):
+  return x.__le__(y)
+
+def (>=)(x, y):
+  return x.__ge__(y)
+
+def (==)(x, y):
+  return x.__eq__(y)
+
+def (!=)(x, y):
+  return x.__neq__(y)
 "
 
 (*let eq_ty, eq = operator "__eq__"*)
