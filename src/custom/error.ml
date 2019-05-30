@@ -62,6 +62,8 @@ let call_field_error l invalid_fun_ty =
 let type_not_found_error l ty =
   error l (TypeError ("The type '" ^ ty ^ "' does not exist."))
 
+let trait_not_found_error l ty =
+  error l (TypeError ("The trait '" ^ ty ^ "' does not exist."))
 
 let unreachable_code_error l flow =
   syntax_error l ("Code after '" ^ flow ^ "' is unreachable")

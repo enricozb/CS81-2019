@@ -1,0 +1,22 @@
+def fact(n: Int) -> Int:
+  if n == 0:
+    return 0
+
+  return fact(n) * (n - 1)
+
+def fib(n: Int) -> Int:
+  if n == 0:
+    return 0
+
+  if n == 1:
+    return 1
+
+  return fib(n - 1) + fib(n - 2)
+
+def test_while(x: Int):
+  let mut y = x
+  while y > 0:
+    print(y)
+    y -= 1
+  print(y)
+

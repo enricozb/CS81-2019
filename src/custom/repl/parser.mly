@@ -283,6 +283,16 @@ funcdef:
                snd $3, $5, snd $6, $7, $9)
   }
 
+  | DEF LPAREN LANGLE RPAREN trait_list name_list ret_ty COLON suite {
+      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $9),
+               "<", $5, snd $6, $7, $9)
+  }
+
+  | DEF LPAREN RANGLE RPAREN trait_list name_list ret_ty COLON suite {
+      Ast.Def (Loc.span $1 (Ast.loc_of_ast_list $9),
+               ">", $5, snd $6, $7, $9)
+  }
+
 ret_ty:
   | { None }
   | MAPSTO ty { Some $2 }
@@ -360,8 +370,20 @@ op_list:
   | OPERATOR non_op_expr {
     (Loc.span (fst $1) (Ast.loc_of_ast $2)), [($1, $2)]
   }
+  | LANGLE non_op_expr {
+    (Loc.span $1 (Ast.loc_of_ast $2)), [(($1, "<"), $2)]
+  }
+  | RANGLE non_op_expr {
+    (Loc.span $1 (Ast.loc_of_ast $2)), [(($1, ">"), $2)]
+  }
   | OPERATOR non_op_expr op_list {
     (Loc.span (fst $1) (fst $3)), ($1, $2) :: (snd $3)
+  }
+  | LANGLE non_op_expr op_list {
+    (Loc.span $1 (fst $3)), (($1, "<"), $2) :: (snd $3)
+  }
+  | RANGLE non_op_expr op_list {
+    (Loc.span $1 (fst $3)), (($1, ">"), $2) :: (snd $3)
   }
 
 

@@ -29,6 +29,7 @@ val call_len_error : Loc.loc ->
 val call_error : Loc.loc -> string -> 'a
 val call_field_error : Loc.loc -> string -> 'a
 val type_not_found_error : Loc.loc -> string -> 'a
+val trait_not_found_error : Loc.loc -> string -> 'a
 
 val unreachable_code_error : Loc.loc -> string -> 'a
 val return_outside_def : Loc.loc -> 'a

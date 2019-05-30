@@ -105,7 +105,7 @@ let instance_def obj field func =
   (*type_class_ty*)
 
 (* TODO: __repr__ should not take any type... It should take Function[*]
- * I could just take anything that provides a `name` field.
+ * I could just take anything that provides a `name` attribute.
  *)
 let rec function_class_ty =
   let rec inner_record = lazy (Type.bare_record_ty
@@ -616,6 +616,30 @@ let showable_trait level ty params =
 
   Type.extensible_field_ty ~level:level "__class__" class_trait
 
+(* ---------------------------- Operator Traits ---------------------------- *)
+(*
+ *  trait Operator[b, c]:
+ *    {__class__: {__op__: Function[Self, b, c]}}
+ *
+ *  where Operator = Add, Sub, etc
+ *)
+let make_operator_trait op =
+  let op_trait level self_ty params =
+    if List.length params <> 2 then
+      failwith "Basis.operator_trait not 3 type params.";
+
+    let other_ty = List.nth params 0 in
+    let ret_ty = List.nth params 1 in
+
+    let op_field = "__" ^ String.lowercase_ascii op ^ "__" in
+
+    let repr_trait = Type.callable_trait ~level:level [self_ty; other_ty] ret_ty in
+    let class_trait = Type.has_field_trait ~level:level op_field repr_trait in
+
+    Type.extensible_field_ty ~level:level "__class__" class_trait
+  in
+  op_trait
+
 (* --------------------------- Common Functions --------------------------- *)
 let __print_string__ =
   unary_fun
@@ -624,7 +648,7 @@ let __print_string__ =
       let raw_str = Object.get_object_field string_obj "val" in
       match raw_str with
       | Value.String s ->
-          Printf.printf "%s\n" s;
+          print_endline s;
           Value.None
       | _ -> failwith "Basis.print_str called on non String"
     )
@@ -695,6 +719,11 @@ let kind_env = Env.bind_pairs
     ("List", Type.KindFun (Type.kind_fun_1 list_of_ty));
 
     ("Showable", Type.KindTrait showable_trait);
+    ("Add", Type.KindTrait (make_operator_trait "Add"));
+    ("Sub", Type.KindTrait (make_operator_trait "Sub"));
+    ("Mul", Type.KindTrait (make_operator_trait "Mul"));
+    ("Div", Type.KindTrait (make_operator_trait "Div"));
+    ("Pow", Type.KindTrait (make_operator_trait "Pow"));
   ] Env.empty
 
 let envs = Type.({
@@ -714,20 +743,26 @@ def len(x):
 def print(x):
   __print_string__(repr(x))
 
-def (+)(x, y):
-  return x.__add__(y)
+def (+)<a: Add[b, c]>(x: a, y: b) -> c:
+  return x.__class__.__add__(x, y)
 
-def (-)(x, y):
-  return x.__sub__(y)
+def (-)<a: Sub[b, c]>(x: a, y: b) -> c:
+  return x.__class__.__sub__(x, y)
 
-def (*)(x, y):
-  return x.__mul__(y)
+def (*)<a: Mul[b, c]>(x: a, y: b) -> c:
+  return x.__class__.__mul__(x, y)
 
-def (/)(x, y):
-  return x.__div__(y)
+def (/)<a: Div[b, c]>(x: a, y: b) -> c:
+  return x.__class__.__div__(x, y)
 
-def (^)(x, y):
-  return x.__pow__(y)
+def (^)<a: Pow[b, c]>(x: a, y: b) -> c:
+  return x.__class__.__pow__(x, y)
+
+def (<)(x, y):
+  return x.__lt__(y)
+
+def (>)(x, y):
+  return x.__gt__(y)
 
 def (<=)(x, y):
   return x.__le__(y)

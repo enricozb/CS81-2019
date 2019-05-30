@@ -120,10 +120,15 @@ let rec run ?(quiet=false) envs ast =
 
 
 let run_basis () =
+  try
     let asts = Repl.parse_string "<basis>" Basis.basis in
     let envs = List.fold_left (run ~quiet:true) Basis.envs asts in
     print_tests_stats ();
     envs
+  with
+    Error.MythError (l, e) ->
+      Error.print_error l e;
+      Basis.envs
 
 
 let rec repl_func ast_or_error envs =

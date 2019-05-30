@@ -128,6 +128,7 @@ let string_of_type ty =
           BatHashtbl.find id_to_char id
         with Not_found ->
           let newid = next_char () in
+          BatHashtbl.add id_to_char id newid;
 
           (* compute the string of the type dependent on whether or not
            * it has traits. If it has traits, it will be a string like
@@ -147,14 +148,13 @@ let string_of_type ty =
           | None -> ()
           end;
 
-          BatHashtbl.add id_to_char id newid;
           newid
         end
 
-    | TyVar {contents = Unbound (id, level, None)} ->
-        "_" ^ (string_of_int level) ^ "_" ^ id
-    | TyVar {contents = Unbound (id, level, Some trait)} ->
-        let id = "_" ^ (string_of_int level) ^ "_" ^ id in
+    | TyVar {contents = Unbound (id, _, None)} ->
+        "_" ^ id
+    | TyVar {contents = Unbound (id, _, Some trait)} ->
+        let id = "_" ^ id in
         begin try
           BatHashtbl.find id_to_char id
         with Not_found ->
@@ -250,9 +250,11 @@ let rec occurs loc tyvar_id tyvar_level ty =
           ()
         else begin
           BatHashtbl.add seen_tyvars tyvar_id2 true;
+          (* Attempt at allowing stuff like <a: Iterable[a]> ... *)
           begin match trait with
           | Some (id, params, _) ->
-              List.iter recurse !params
+              (*List.iter recurse !params*)
+              ()
           | None -> ()
           end;
 
@@ -619,76 +621,105 @@ and pairwise_unify loc tys = match tys with
 
 
 (* -------------------- GENERALIZATION & INSTANTIATION -------------------- *)
-let rec generalize level ty =
-  match ty with
-  | TyVar {contents = Unbound (tyvar_id, tyvar_level, None)}
-    when tyvar_level > level ->
-      TyVar (ref (Generic (tyvar_id, None)))
+let generalize level ty =
+  (* used for recursive types like <a: Iterable[a]> *)
+  let unbound_to_generic = BatHashtbl.create 10 in
 
-  | TyVar {contents = Unbound (tyvar_id, tyvar_level, Some trait)}
-    when tyvar_level > level ->
-      let (name, params, record_ty) = trait in
-      let name = !name in
-      let params = List.map (generalize level) !params in
-      let record_ty = lazy (generalize level (Lazy.force record_ty)) in
+  let rec recurse = function
+    | TyVar {contents = Unbound (tyvar_id, tyvar_level, None)}
+      when tyvar_level > level ->
+        TyVar (ref (Generic (tyvar_id, None)))
 
-      let trait = (ref name, ref params, record_ty) in
-      TyVar (ref (Generic (tyvar_id, Some trait)))
+    | TyVar {contents = Unbound (tyvar_id, tyvar_level, Some trait)}
+      when tyvar_level > level ->
 
-  | TyVar {contents = Link ty} -> generalize level ty
+        begin match BatHashtbl.find_option unbound_to_generic tyvar_id with
+          | None ->
+              let temp_tyvar_ref = ref (Generic ("temp~" ^ tyvar_id, None)) in
+              BatHashtbl.add unbound_to_generic tyvar_id temp_tyvar_ref;
 
-  | TyCon (name, param_tys) ->
-      TyCon (name, List.map (generalize level) param_tys)
+              let (name, params, record_ty) = trait in
+              let name = !name in
+              let params = List.map recurse !params in
+              let record_ty = lazy (recurse (Lazy.force record_ty)) in
 
-  | TyFun (param_tys, ret_ty) ->
-      TyFun (List.map (generalize level) param_tys, generalize level ret_ty)
+              let trait = (ref name, ref params, record_ty) in
+              temp_tyvar_ref := Generic (tyvar_id, Some trait);
+              TyVar (temp_tyvar_ref)
+          | Some tyvar_ref ->
+              TyVar tyvar_ref
+        end
 
-  | TyRecord tyrow -> TyRecord (generalize level tyrow)
+    | TyVar {contents = Link ty} -> recurse ty
 
-  | TyRowExtend (name_ty_map, rest_ty) ->
-        TyRowExtend (Ast.NameMap.map (generalize level) name_ty_map,
-                     generalize level rest_ty)
+    | TyCon (name, param_tys) ->
+        TyCon (name, List.map recurse param_tys)
 
-  | TyVar {contents = Generic _}
-  | TyVar {contents = Unbound _}
+    | TyFun (param_tys, ret_ty) ->
+        TyFun (List.map recurse param_tys, recurse ret_ty)
 
-  | TyRowEmpty as ty -> ty
+    | TyRecord tyrow -> TyRecord (recurse tyrow)
 
-  | TyFold (None, ty) ->
-      TyFold (None, lazy (generalize level (Lazy.force ty)))
-  | TyFold (Some (id, param_tys), ty) ->
-      TyFold (Some (id, List.map (generalize level) param_tys),
-              lazy (generalize level @@ Lazy.force ty))
+    | TyRowExtend (name_ty_map, rest_ty) ->
+          TyRowExtend (Ast.NameMap.map recurse name_ty_map, recurse rest_ty)
 
-  | TyUnfold _ ->
-      failwith "Type.generalize on TyUnfold"
+    | TyVar {contents = Generic _}
+    | TyVar {contents = Unbound _}
+
+    | TyRowEmpty as ty -> ty
+
+    | TyFold (None, ty) ->
+        TyFold (None, lazy (recurse (Lazy.force ty)))
+    | TyFold (Some (id, param_tys), ty) ->
+        TyFold (Some (id, List.map recurse param_tys),
+                lazy (recurse @@ Lazy.force ty))
+
+    | TyUnfold _ ->
+        failwith "Type.generalize on TyUnfold"
+  in
+  recurse ty
 
 let rec instantiate level ty =
-  let generic_to_unbound = Hashtbl.create 10 in
+  let generic_to_unbound = BatHashtbl.create 10 in
+
   let rec recurse = function
     | TyVar {contents = Link ty} -> recurse ty
     | TyVar {contents = Generic (gen_id, None)} ->
         begin try
-          Hashtbl.find generic_to_unbound gen_id
+          BatHashtbl.find generic_to_unbound gen_id
         with Not_found ->
           let tyvar = fresh_tyvar level () in
-          Hashtbl.add generic_to_unbound gen_id tyvar;
+          BatHashtbl.add generic_to_unbound gen_id tyvar;
           tyvar
         end
 
     | TyVar {contents = Generic (gen_id, Some trait)} ->
-        begin try
-          Hashtbl.find generic_to_unbound gen_id
-        with Not_found ->
-          let (name, params, record_ty) = trait in
-          let name = !name in
-          let params = List.map recurse !params in
-          let record_ty = lazy (recurse (Lazy.force record_ty)) in
-          let trait = (ref name, ref params, record_ty) in
+        begin match BatHashtbl.find_option generic_to_unbound gen_id with
+          | None ->
+              (* this will be replaced at the end of this match arm *)
+              let temp_tyvar_ref =
+                (ref (Unbound ("temp~" ^ gen_id, -1, None)))
+              in
+              let temp_tyvar = TyVar temp_tyvar_ref in
 
-          let tyvar = fresh_tyvar level ~trait:(Some trait) () in
-          Hashtbl.add generic_to_unbound gen_id tyvar;
-          tyvar
+              BatHashtbl.add generic_to_unbound gen_id temp_tyvar;
+
+              let (name, params, record_ty) = trait in
+              let name = !name in
+              let params = List.map recurse !params in
+              let record_ty = lazy (recurse (Lazy.force record_ty)) in
+              let trait = (ref name, ref params, record_ty) in
+
+              begin match fresh_tyvar level ~trait:(Some trait) () with
+                | TyVar {contents = tyvar} ->
+                    temp_tyvar_ref := tyvar
+                | _ ->
+                    assert false
+              end;
+              temp_tyvar
+
+          | Some tyvar ->
+               tyvar
         end
 
     | TyVar {contents = Unbound _} as ty -> ty
@@ -819,7 +850,7 @@ let apply_trait level trait kind_env =
         in
         begin match Env.get_opt id kind_env with
           | None ->
-              Error.type_not_found_error l id
+              Error.trait_not_found_error l id
           | Some (KindTrait trait_fun) ->
               (kind_env, id, param_tys, (fun ty -> trait_fun level ty param_tys))
           | Some _ ->
