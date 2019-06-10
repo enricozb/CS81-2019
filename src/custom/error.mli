@@ -3,6 +3,7 @@ type error =
   | NameError of string
   | BindError of string
   | TypeError of string
+  | FieldError of string
   | SyntaxError of string
   | ImplementationError of string
 
@@ -21,7 +22,7 @@ val type_mismatch_error : Loc.loc ->
                           expected: string ->
                           provided: string -> 'a
 val unify_error : Loc.loc -> string -> string -> 'a
-val missing_field : Loc.loc -> string -> 'a
+val missing_field_for_type : Loc.loc -> string -> string -> 'a
 val call_len_error : Loc.loc ->
                      fun_ty : string ->
                      expected : int ->

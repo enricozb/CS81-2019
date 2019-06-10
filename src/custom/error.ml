@@ -3,22 +3,24 @@ type error =
   | NameError of string
   | BindError of string
   | TypeError of string
+  | FieldError of string
   | SyntaxError of string
   | ImplementationError of string
 
 exception MythError of Loc.loc * error
 
 let string_of_error l = function
-  | RuntimeError s -> (Loc.string_of_loc_short l) ^ "; RuntimeError: '" ^ s ^ "'"
-  | BindError s -> (Loc.string_of_loc_short l) ^ "; BindError: '" ^ s ^ "'"
-  | NameError s -> (Loc.string_of_loc_short l) ^ "; NameError: '" ^ s ^ "'"
-  | TypeError s -> (Loc.string_of_loc_short l) ^ "; TypeError: '" ^ s ^ "'"
+  | RuntimeError s -> (Loc.string_of_loc_short l) ^ "; RuntimeError: " ^ s
+  | BindError s -> (Loc.string_of_loc_short l) ^ "; BindError: " ^ s
+  | NameError s -> (Loc.string_of_loc_short l) ^ "; NameError: " ^ s
+  | TypeError s -> (Loc.string_of_loc_short l) ^ "; TypeError: " ^ s
+  | FieldError s -> (Loc.string_of_loc_short l) ^ "; FieldError: " ^ s
   | SyntaxError "" ->
       (Loc.string_of_loc_short l) ^ "; SyntaxError"
   | SyntaxError s ->
-      (Loc.string_of_loc_short l) ^ "; SyntaxError: '" ^ s ^ "'"
+      (Loc.string_of_loc_short l) ^ "; SyntaxError: " ^ s
   | ImplementationError s ->
-      (Loc.string_of_loc_short l) ^ "; ImplementationError: '" ^ s ^ "'"
+      (Loc.string_of_loc_short l) ^ "; ImplementationError: " ^ s
 
 let print_error l error = Printf.printf "%s\n" (string_of_error l error)
 
@@ -42,8 +44,8 @@ let type_mismatch_error l ~expected ~provided =
 let unify_error l ty1 ty2 =
   error l (TypeError ("Cannot unify types " ^ ty1 ^ " and " ^ ty2 ^ "."))
 
-let missing_field l field =
-  error l (TypeError ("Field '" ^ field ^ "' is missing"))
+let missing_field_for_type l ty field =
+  error l (FieldError ("Type '" ^ ty ^ "' has no field '" ^ field ^ "'"))
 
 let call_len_error l ~fun_ty ~expected ~provided =
   error l (TypeError (fun_ty ^ " takes " ^ (string_of_int expected) ^

@@ -1,3 +1,9 @@
+(* -------------------- Exceptions Internal to type.ml -------------------- *)
+type ty_error =
+  | MissingField of string
+
+exception TypeCheckingError of ty_error
+
 (* --------------------------------- TYPES --------------------------------- *)
 type id = string
 type level = int
@@ -419,137 +425,160 @@ let unfold loc ty =
         ~loc: loc
         ("Type.unfold: Called on non-unfoldable: " ^ (string_of_type ty))
 
-let rec unify loc ty1 ty2 =
+let rec unify loc ?(top_tys=None) ty1 ty2 =
   (*Printf.printf "unifying: \n\t%s\n\n\t%s\n\n" (string_of_type ty1) (string_of_type ty2);*)
-  let unify = unify loc in
-  if ty1 == ty2 then
-    ()
-  else
-    match (ty1, ty2) with
-    | TyCon (name1, ty_params1), TyCon (name2, ty_params2) ->
-        if name1 = name2 && List.length ty_params1 = List.length ty_params2 then
-          List.iter2 unify ty_params1 ty_params2
-        else
+  let rec recurse ?(top_tys=None) ty1 ty2 =
+    if ty1 == ty2 then
+      ()
+    else
+      match (ty1, ty2) with
+      | TyCon (name1, ty_params1), TyCon (name2, ty_params2) ->
+          if name1 = name2 && List.length ty_params1 = List.length ty_params2 then
+            List.iter2 recurse ty_params1 ty_params2
+          else
+            Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
+
+      | TyVar {contents = Link ty1}, ty2
+      | ty1, TyVar {contents = Link ty2} ->
+          recurse ty1 ty2
+
+      (* non-trait bounded type variable *)
+      | TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref), ty
+      | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref) ->
+          (* TODO: maybe catch the MythError and raise an error specific to
+           * the two types `ty1` and `ty2`? *)
+          occurs loc tyvar_id tyvar_level ty;
+          ty_ref := Link ty
+
+      (* unifying two trait bounded type variables *)
+      | TyVar ({contents = Unbound (id1, level1, Some trait1)} as ty_ref1),
+        TyVar {contents = Unbound (id2, level2, Some trait2)} ->
+          if id1 == id2 then
+            ()
+          else begin
+            let (name1, params1, record_ty1) = trait1 in
+            let (name2, params2, record_ty2) = trait2 in
+
+            List.iter (occurs loc id1 level1) !params2;
+            List.iter (occurs loc id2 level2) !params1;
+
+            (* eliminate ty_ref1. Do this before recursive call so that recursive
+             * structures hopefully don't infinite loop. Recursive usage of a
+             * type variable will have been replaced already, I hope *)
+            ty_ref1 := Link ty2;
+
+            (* used to make missing field errors clearer *)
+            let top_tys =
+              (TyCon (!name1, !params1), TyCon (!name2, !params2))
+            in
+            recurse ~top_tys:(Some top_tys) (Lazy.force record_ty1) (Lazy.force record_ty2);
+
+            (* TODO: set both names equal.
+             * Might just need to change one of them? *)
+            let new_name = !name1 ^ " + " ^ !name2 in
+            name1 := new_name;
+            name2 := new_name;
+
+            let new_params = !params1 @ !params2 in
+            params1 := new_params;
+            params2 := new_params
+          end
+
+      (* unifying a trait bounded type variable with a non-type variable *)
+      | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), (TyFold (_, record_ty) as fold_ty)
+      | (TyFold (_, record_ty) as fold_ty), TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
+
+          let (name, params, trait_record) = trait in
+
+          (* eliminate the type variable. Do this before recursive call so that
+           * recursive structures hopefully don't infinite loop. Recursive usage
+           * of a type variable will have been replaced already, I hope. *)
+          occurs loc tyvar_id tyvar_level fold_ty;
+          ty_ref := Link fold_ty;
+
+          (* the order of these types must match the order in the `recurse` call below *)
+          let top_tys = (TyCon (!name, !params), fold_ty) in
+
+          (* make sure `ty` conforms to the trait contents *)
+          recurse ~top_tys:(Some top_tys) (Lazy.force trait_record) (Lazy.force record_ty)
+
+          (* TODO : trait no longer exists, do we need to do anything to it? *)
+
+      | TyFun (ty_params1, ty_ret1), TyFun (ty_params2, ty_ret2) ->
+          (* TODO : improve this error... it's often just a simple
+           * call error, where the incorrect number of arguments were
+           * provided *)
+          if List.length ty_params1 <> List.length ty_params2 then
+            Error.unify_error loc (string_of_type ty1) (string_of_type ty2);
+
+          (* return types should be equal, as should argument types *)
+          List.iter2 recurse ty_params1 ty_params2;
+          recurse ty_ret1 ty_ret2
+
+      | TyRecord tyrow1, TyRecord tyrow2 ->
+          recurse ~top_tys:top_tys tyrow1 tyrow2
+
+      | TyRowEmpty, TyRowEmpty -> ()
+
+      | (TyRowExtend _ as tyrow1), (TyRowExtend _ as tyrow2) ->
+          unify_rows loc top_tys tyrow1 tyrow2
+
+      | TyRowEmpty, TyRowExtend (name_ty_map, _) ->
+          let field, _ = Ast.NameMap.choose name_ty_map in
+          begin match top_tys with
+          | None ->
+            Error.missing_field_for_type loc ("UNKNOWN TYPE, MISSING TOP_TYS!") field
+          | Some (top_ty1, _)->
+            Error.missing_field_for_type loc (string_of_type top_ty1) field
+          end
+
+      | TyRowExtend (name_ty_map, _), TyRowEmpty ->
+          let field, _ = Ast.NameMap.choose name_ty_map in
+          begin match top_tys with
+          | None ->
+            Error.missing_field_for_type loc ("UNKNOWN TYPE, MISSING TOP_TYS!") field
+          | Some (_, top_ty2)->
+            Error.missing_field_for_type loc (string_of_type top_ty2) field
+          end
+
+      | TyFold (Some (id1, param_tys1), _),
+        TyFold (Some (id2, param_tys2), _) ->
+          recurse (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
+
+      | TyFold (None, ty1), TyFold (None, ty2) ->
+          recurse (Lazy.force ty1) (Lazy.force ty2)
+
+      (* useful when unifying something like
+       *
+       *    Unfold(_t1) = Unfold(Fold({...}))
+       *
+       * so, when we have a unfolded type variable.
+       *
+       * The `if` is so if we have two trait-bounded type variables being
+       * unified with Unfolds, we actually get their contents, not just
+       * the trait-bounded type variables.
+       *)
+      | TyUnfold (ty1), TyUnfold (ty2) ->
+          if can_unfold ty1 && can_unfold ty2 then
+            recurse (unfold loc ty1) (unfold loc ty2)
+          else
+            recurse ty1 ty2
+
+      | TyUnfold (ty1), ty2
+      | ty2, TyUnfold (ty1) ->
+          recurse (unfold loc ty1) ty2;
+
+      | TyFold (Some (name1, params1), _), TyCon (name2, params2)
+      | TyCon (name1, params1), TyFold (Some (name2, params2), _) ->
+          recurse (TyCon (name1, params1)) (TyCon (name2, params2))
+
+      | (ty1, ty2) ->
           Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
-
-    | TyVar {contents = Link ty1}, ty2
-    | ty1, TyVar {contents = Link ty2} ->
-        unify ty1 ty2
-
-    (* non-trait bounded type variable *)
-    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref), ty
-    | ty, TyVar ({contents = Unbound (tyvar_id, tyvar_level, None)} as ty_ref) ->
-        (* TODO: maybe catch the MythError and raise an error specific to
-         * the two types `ty1` and `ty2`? *)
-        occurs loc tyvar_id tyvar_level ty;
-        ty_ref := Link ty
-
-    (* unifying two trait bounded type variables *)
-    | TyVar ({contents = Unbound (id1, level1, Some trait1)} as ty_ref1),
-      TyVar {contents = Unbound (id2, level2, Some trait2)} ->
-        if id1 == id2 then
-          ()
-        else begin
-          let (name1, params1, record_ty1) = trait1 in
-          let (name2, params2, record_ty2) = trait2 in
-
-          List.iter (occurs loc id1 level1) !params2;
-          List.iter (occurs loc id2 level2) !params1;
-
-          (* eliminate ty_ref1. Do this before recursive call so that recursive
-           * structures hopefully don't infinite loop. Recursive usage of a
-           * type variable will have been replaced already, I hope *)
-          ty_ref1 := Link ty2;
-          unify (Lazy.force record_ty1) (Lazy.force record_ty2);
-
-          (* TODO: set both names equal.
-           * Might just need to change one of them? *)
-          let new_name = !name1 ^ " + " ^ !name2 in
-          name1 := new_name;
-          name2 := new_name;
-
-          let new_params = !params1 @ !params2 in
-          params1 := new_params;
-          params2 := new_params
-        end
-
-    (* unifying a trait bounded type variable with a non-type variable *)
-    | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), (TyFold (_, record_ty) as fold_ty)
-    | (TyFold (_, record_ty) as fold_ty), TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
-
-        let (name, params, trait_record) = trait in
-
-        (* eliminate the type variable. Do this before recursive call so that
-         * recursive structures hopefully don't infinite loop. Recursive usage
-         * of a type variable will have been replaced already, I hope. *)
-        occurs loc tyvar_id tyvar_level fold_ty;
-        ty_ref := Link fold_ty;
-
-        (* make sure `ty` conforms to the trait contents *)
-        unify (Lazy.force trait_record) (Lazy.force record_ty)
-
-        (* TODO : trait no longer exists, do we need to do anything to it? *)
-
-    | TyFun (ty_params1, ty_ret1), TyFun (ty_params2, ty_ret2) ->
-        (* TODO : improve this error... it's often just a simple
-         * call error, where the incorrect number of arguments were
-         * provided *)
-        if List.length ty_params1 <> List.length ty_params2 then
-          Error.unify_error loc (string_of_type ty1) (string_of_type ty2);
-
-        (* return types should be equal, as should argument types *)
-        List.iter2 unify ty_params1 ty_params2;
-        unify ty_ret1 ty_ret2
-
-    | TyRecord tyrow1, TyRecord tyrow2 ->
-        unify tyrow1 tyrow2
-
-    | TyRowEmpty, TyRowEmpty -> ()
-
-    | (TyRowExtend _ as tyrow1), (TyRowExtend _ as tyrow2) ->
-        unify_rows loc tyrow1 tyrow2
-
-    | TyRowEmpty, TyRowExtend (name_ty_map, _)
-    | TyRowExtend (name_ty_map, _), TyRowEmpty ->
-        let field, _ = Ast.NameMap.choose name_ty_map in
-        Error.missing_field loc field
-
-    | TyFold (Some (id1, param_tys1), _),
-      TyFold (Some (id2, param_tys2), _) ->
-        unify (TyCon (id1, param_tys1)) (TyCon (id2, param_tys2))
-
-    | TyFold (None, ty1), TyFold (None, ty2) ->
-        unify (Lazy.force ty1) (Lazy.force ty2)
-
-    (* useful when unifying something like
-     *
-     *    Unfold(_t1) = Unfold(Fold({...}))
-     *
-     * so, when we have a unfolded type variable.
-     *
-     * The `if` is so if we have two trait-bounded type variables being
-     * unified with Unfolds, we actually get their contents, not just
-     * the trait-bounded type variables.
-     *)
-    | TyUnfold (ty1), TyUnfold (ty2) ->
-        if can_unfold ty1 && can_unfold ty2 then
-          unify (unfold loc ty1) (unfold loc ty2)
-        else
-          unify ty1 ty2
-
-    | TyUnfold (ty1), ty2
-    | ty2, TyUnfold (ty1) ->
-        unify (unfold loc ty1) ty2;
-
-    | TyFold (Some (name1, params1), _), TyCon (name2, params2)
-    | TyCon (name1, params1), TyFold (Some (name2, params2), _) ->
-        unify (TyCon (name1, params1)) (TyCon (name2, params2))
-
-    | (ty1, ty2) ->
-        Error.unify_error loc (string_of_type ty1) (string_of_type ty2)
+    in
+    recurse ~top_tys:top_tys ty1 ty2
 
 
-and unify_rows loc tyrow1 tyrow2 =
+and unify_rows loc top_tys tyrow1 tyrow2 =
   let name_ty_map1, rest_ty1 = collapse_tyrow tyrow1 in
   let name_ty_map2, rest_ty2 = collapse_tyrow tyrow2 in
 
@@ -587,24 +616,24 @@ and unify_rows loc tyrow1 tyrow2 =
   in
 
   match (Ast.NameMap.is_empty missing1, Ast.NameMap.is_empty missing2) with
-    | (true, true) -> unify loc rest_ty1 rest_ty2
-    | (true, false) -> unify loc (TyRowExtend (missing2, rest_ty1)) rest_ty2
-    | (false, true) -> unify loc rest_ty1 (TyRowExtend (missing1, rest_ty2))
+    | (true, true) -> unify loc ~top_tys:top_tys rest_ty1 rest_ty2
+    | (true, false) -> unify loc ~top_tys:top_tys (TyRowExtend (missing2, rest_ty1)) rest_ty2
+    | (false, true) -> unify loc ~top_tys:top_tys rest_ty1 (TyRowExtend (missing1, rest_ty2))
     | (false, false) ->
         begin match rest_ty1 with
           | TyRowEmpty ->
               (* will result in an error *)
-              unify loc rest_ty1 (TyRowExtend (missing1, fresh_tyvar 0 ()))
+              unify loc ~top_tys:top_tys rest_ty1 (TyRowExtend (missing1, fresh_tyvar 0 ()))
 
           (* trait is always None since this is an extend type *)
           | TyVar ({contents = Unbound (_, level, None)} as ty_ref) ->
               let new_rest_row_var = fresh_tyvar level () in
-              unify loc rest_ty2 (TyRowExtend (missing2, new_rest_row_var));
+              unify loc ~top_tys:top_tys (TyRowExtend (missing2, new_rest_row_var)) rest_ty2 ;
               begin match !ty_ref with
                 | Link _ -> Error.type_error loc "recursive types"
                 | _ -> ()
               end;
-              unify loc rest_ty1 (TyRowExtend (missing1, new_rest_row_var))
+              unify loc ~top_tys:top_tys rest_ty1 (TyRowExtend (missing1, new_rest_row_var))
 
           | TyVar {contents = Unbound (_, level, _)} ->
              failwith "Type.unify_rows extend tyvar has non-None trait"
@@ -612,7 +641,7 @@ and unify_rows loc tyrow1 tyrow2 =
           | _ -> assert false
         end
 
-and pairwise_unify loc tys = match tys with
+let rec pairwise_unify loc tys = match tys with
   | [] -> ()
   | [ty] -> ()
   | ty1 :: ty2 :: tys ->
@@ -960,8 +989,15 @@ and infer level envs ast = match ast with
       (*Printf.printf "handling access of '%s'\n" field_name;*)
       let field_ty = fresh_tyvar level () in
       let record_ty = has_field_trait ~level:level field_name field_ty in
+      let ast_ty = infer level envs ast in
 
-      unify l (TyUnfold record_ty) (TyUnfold (infer level envs ast));
+      begin try
+        unify l (TyUnfold record_ty) (TyUnfold ast_ty)
+      with
+      | TypeCheckingError (MissingField field) ->
+          Error.missing_field_for_type l (string_of_type ast_ty) (field)
+      end;
+
       (*Printf.printf "handled access of '%s'\n" field_name;*)
       field_ty
 

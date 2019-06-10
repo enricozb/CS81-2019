@@ -127,7 +127,7 @@
             incr dedent_count;
             ignore (Stack.pop space_stack);
         done;
-        raise (SyntaxError ("Invalid DEDENT stack", loc))
+        error "Invalid DEDENT stack" loc
       with Exit -> `Token (DEINDENT (loc, !dedent_count))
 
   let make_loc filename lexbuf =
@@ -212,11 +212,11 @@ rule token filename = parse
         else
           OPERATOR (loc, op)
   }
+  | eof { EOF }
   | _ as t {
     let msg = "Unexpected token '" ^ String.make 1 t ^ "'" in
-    raise (SyntaxError (msg, make_loc filename lexbuf))
+    error msg (make_loc filename lexbuf)
   }
-  | eof { EOF }
 
 and make_string filename buffer = parse
   | '"' { (make_loc filename lexbuf), Buffer.contents buffer }
@@ -232,7 +232,9 @@ and make_string filename buffer = parse
     Buffer.add_char buffer '"';
     make_string filename buffer lexbuf
   }
-  | eof { raise End_of_file }
+  | eof {
+    error "EOL while scanning string literal" (make_loc filename lexbuf)
+  }
   | _ as c {
     Buffer.add_char buffer c;
     make_string filename buffer lexbuf
