@@ -18,6 +18,11 @@ type ty =
   | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types *)
   | TyUnfold of ty
 
+  (* this really shouldn't exist... It's used only in unify *)
+  (* it is a trait that is not backed by a full record type,
+   * and is only *)
+  | TyTraitCon of (string, ty list) BatHashtbl.t
+
 and tyvar =
   | Link of ty
   | Unbound of id * level * (trait option)
@@ -32,7 +37,7 @@ and kind_fun = (ty list) -> ty
 and kind_trait = level -> ty -> (ty list) -> ty
 
 (* a mutable TyFold *)
-and trait = (string ref) * ((ty list) ref) * (ty Lazy.t)
+and trait = ((string, ty list) BatHashtbl.t) * (ty Lazy.t)
 
 and tyrow = ty (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 
@@ -123,9 +128,18 @@ let string_of_type ty =
     String.concat ", " (List.map (recurse ~toplevel:false) tys)
 
   and string_of_trait trait =
-    let (name, params, _) = trait in
-    let param_strs = List.map recurse !params in
-    "(" ^ !name ^ ")[" ^ (String.concat ", " param_strs) ^ "]"
+    let (name_params_map, _) = trait in
+    let trait_strs =
+      List.map
+        (fun (name, params) ->
+          let param_strs = List.map recurse params in
+          if param_strs = [] then
+            name
+          else
+            name ^ "[" ^ (String.concat ", " param_strs) ^ "]")
+        (List.sort compare @@ BatHashtbl.bindings name_params_map)
+    in
+    String.concat " + " trait_strs
 
   and recurse ?(toplevel=false) ty =
     match ty with
@@ -228,9 +242,12 @@ let string_of_type ty =
               "UNFOLD(" ^ recurse ty1 ^ ")"
         end
 
+    | TyTraitCon trait_con ->
+        string_of_trait (trait_con, lazy (TyCon ("~ty-trait-con~INTERNAL", [])))
+
   in
   let ty_str = recurse ~toplevel:true ty in
-  let trait_bindings = BatHashtbl.bindings id_to_traits in
+  let trait_bindings = List.sort compare (BatHashtbl.bindings id_to_traits) in
   if trait_bindings = [] then
     ty_str
   else
@@ -256,14 +273,10 @@ let rec occurs loc tyvar_id tyvar_level ty =
           ()
         else begin
           BatHashtbl.add seen_tyvars tyvar_id2 true;
-          (* Attempt at allowing stuff like <a: Iterable[a]> ... *)
-          begin match trait with
-          | Some (id, params, _) ->
-              (*List.iter recurse !params*)
-              ()
-          | None -> ()
-          end;
-
+          (*
+           * Because we allow recursive traits like <a: Addable[a, a]>,
+           * we don't check the trait at all
+           *)
           if tyvar_id = tyvar_id2 then
             Error.type_error loc "recursive types"
           else
@@ -319,6 +332,11 @@ and make_tyvar level generic ?(trait=None) () =
   else
     fresh_tyvar level ~trait:trait ()
 
+let make_singleton_trait name param_tys record_ty =
+  let name_params_map = BatHashtbl.create 1 in
+  BatHashtbl.add name_params_map name param_tys;
+  (name_params_map, record_ty)
+
 (* ----------------------------- COMMON TYPES ----------------------------- *)
 (* initialized in basis.ml *)
 let function_class_ty = ref (TyCon ("FakeFunctionClass", []))
@@ -340,6 +358,7 @@ let none_ty = TyCon ("None", [])
 let bool_ty = TyCon ("Bool", [])
 let prim_fun_ty param_tys ret_ty = TyFun (param_tys, ret_ty)
 
+(* to be filled with some stuff eventually... *)
 let rec base_record_fields () = Ast.NameMap.empty
 
 and bare_record_ty name_ty_list =
@@ -385,7 +404,10 @@ let callable_trait ?(level=0) ?(generic=false) param_tys ret_ty =
       )
     ))
   in
-  let trait = (ref "Callable", ref (param_tys @ [ret_ty]), record_ty) in
+  let trait =
+    make_singleton_trait "Callable" (param_tys @ [ret_ty]) record_ty
+  in
+
   make_tyvar level generic ~trait:(Some trait) ()
 
 let extensible_field_ty ?(level=0) ?(generic=false) field field_ty =
@@ -400,7 +422,9 @@ let has_field_trait ?(level=0) ?(generic=false) field field_ty =
   let record_ty =
     lazy (extensible_field_ty ~level:level ~generic:generic field field_ty)
   in
-  let trait = (ref ("{" ^ field ^ "}"), ref [field_ty], record_ty) in
+  let trait =
+    make_singleton_trait ("{" ^ field ^ "}") [field_ty] record_ty
+  in
   make_tyvar level generic ~trait:(Some trait) ()
 
 (* ------------------------------ UNIFICATION ------------------------------ *)
@@ -416,8 +440,7 @@ let can_unfold ty =
 let unfold loc ty =
   match ty with
   | TyVar {contents = Unbound (_, _, Some trait)} ->
-      let (_, _, record_ty) = trait in
-      Lazy.force record_ty
+      let (_, record_ty) = trait in Lazy.force record_ty
   | TyFold (_, record_ty) ->
       Lazy.force record_ty
   | _ ->
@@ -456,39 +479,49 @@ let rec unify loc ?(top_tys=None) ty1 ty2 =
           if id1 == id2 then
             ()
           else begin
-            let (name1, params1, record_ty1) = trait1 in
-            let (name2, params2, record_ty2) = trait2 in
+            let (name_params_map1, record_ty1) = trait1 in
+            let (name_params_map2, record_ty2) = trait2 in
 
-            List.iter (occurs loc id1 level1) !params2;
-            List.iter (occurs loc id2 level2) !params1;
+            (* should this happen? this might prevent recursive traits *)
+            (*List.iter (occurs loc id1 level1) !params2;*)
+            (*List.iter (occurs loc id2 level2) !params1;*)
 
             (* eliminate ty_ref1. Do this before recursive call so that recursive
              * structures hopefully don't infinite loop. Recursive usage of a
              * type variable will have been replaced already, I hope *)
             ty_ref1 := Link ty2;
 
-            (* used to make missing field errors clearer *)
+            (* this as top_tyes makes missing field errors clearer *)
             let top_tys =
-              (TyCon (!name1, !params1), TyCon (!name2, !params2))
+              (TyTraitCon name_params_map1, TyTraitCon name_params_map2)
             in
-            recurse ~top_tys:(Some top_tys) (Lazy.force record_ty1) (Lazy.force record_ty2);
+            recurse
+              ~top_tys:(Some top_tys)
+              (Lazy.force record_ty1)
+              (Lazy.force record_ty2);
 
-            (* TODO: set both names equal.
+            (* TODO: changing both TyTraitCons...
              * Might just need to change one of them? *)
-            let new_name = !name1 ^ " + " ^ !name2 in
-            name1 := new_name;
-            name2 := new_name;
+            BatHashtbl.iter
+              (fun name params ->
+                if not (BatHashtbl.mem name_params_map2 name) then
+                  BatHashtbl.add name_params_map2 name params
+              )
+              name_params_map1;
 
-            let new_params = !params1 @ !params2 in
-            params1 := new_params;
-            params2 := new_params
+            BatHashtbl.iter
+              (fun name params ->
+                if not (BatHashtbl.mem name_params_map1 name) then
+                  BatHashtbl.add name_params_map1 name params
+              )
+              name_params_map2;
           end
 
       (* unifying a trait bounded type variable with a non-type variable *)
       | TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref), (TyFold (_, record_ty) as fold_ty)
       | (TyFold (_, record_ty) as fold_ty), TyVar ({contents = Unbound (tyvar_id, tyvar_level, Some trait)} as ty_ref) ->
 
-          let (name, params, trait_record) = trait in
+          let (name_params_map, trait_record) = trait in
 
           (* eliminate the type variable. Do this before recursive call so that
            * recursive structures hopefully don't infinite loop. Recursive usage
@@ -497,7 +530,7 @@ let rec unify loc ?(top_tys=None) ty1 ty2 =
           ty_ref := Link fold_ty;
 
           (* the order of these types must match the order in the `recurse` call below *)
-          let top_tys = (TyCon (!name, !params), fold_ty) in
+          let top_tys = (TyTraitCon name_params_map, fold_ty) in
 
           (* make sure `ty` conforms to the trait contents *)
           recurse ~top_tys:(Some top_tys) (Lazy.force trait_record) (Lazy.force record_ty)
@@ -559,9 +592,9 @@ let rec unify loc ?(top_tys=None) ty1 ty2 =
        * the trait-bounded type variables.
        *)
       | TyUnfold (ty1), TyUnfold (ty2) ->
-          if can_unfold ty1 && can_unfold ty2 then
-            recurse (unfold loc ty1) (unfold loc ty2)
-          else
+          (*if can_unfold ty1 && can_unfold ty2 then*)
+            (*recurse (unfold loc ty1) (unfold loc ty2)*)
+          (*else*)
             recurse ty1 ty2
 
       | TyUnfold (ty1), ty2
@@ -667,12 +700,16 @@ let generalize level ty =
               let temp_tyvar_ref = ref (Generic ("temp~" ^ tyvar_id, None)) in
               BatHashtbl.add unbound_to_generic tyvar_id temp_tyvar_ref;
 
-              let (name, params, record_ty) = trait in
-              let name = !name in
-              let params = List.map recurse !params in
+              let (name_params_map, record_ty) = trait in
+
+              let name_params_map =
+                BatHashtbl.map
+                  (fun _ params -> List.map recurse params)
+                  name_params_map
+              in
               let record_ty = lazy (recurse (Lazy.force record_ty)) in
 
-              let trait = (ref name, ref params, record_ty) in
+              let trait = (name_params_map, record_ty) in
               temp_tyvar_ref := Generic (tyvar_id, Some trait);
               TyVar (temp_tyvar_ref)
           | Some tyvar_ref ->
@@ -733,11 +770,15 @@ let rec instantiate level ty =
 
               BatHashtbl.add generic_to_unbound gen_id temp_tyvar;
 
-              let (name, params, record_ty) = trait in
-              let name = !name in
-              let params = List.map recurse !params in
+              let (name_params_map, record_ty) = trait in
+
+              let name_params_map =
+                BatHashtbl.map
+                  (fun _ params -> List.map recurse params)
+                  name_params_map
+              in
               let record_ty = lazy (recurse (Lazy.force record_ty)) in
-              let trait = (ref name, ref params, record_ty) in
+              let trait = (name_params_map, record_ty) in
 
               begin match fresh_tyvar level ~trait:(Some trait) () with
                 | TyVar {contents = tyvar} ->
@@ -910,7 +951,7 @@ let apply_trait level trait kind_env =
   match tyvar with
   | TyVar ({contents = Unbound (id, level, None)} as tyvar_ref) ->
       let record_ty = lazy (trait_fun (TyVar tyvar_ref)) in
-      let trait = (ref trait_name, ref trait_params, record_ty) in
+      let trait = make_singleton_trait trait_name trait_params record_ty in
       tyvar_ref := Unbound (id, level, Some trait);
       kind_env
   | TyVar ({contents = Unbound (id, _, Some _)}) ->

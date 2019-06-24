@@ -42,7 +42,7 @@ let type_mismatch_error l ~expected ~provided =
   error l (TypeError ("Expected " ^ expected ^ " but got " ^ provided))
 
 let unify_error l ty1 ty2 =
-  error l (TypeError ("Cannot unify types " ^ ty1 ^ " and " ^ ty2 ^ "."))
+  error l (TypeError ("Cannot unify types '" ^ ty1 ^ "' and '" ^ ty2 ^ "'."))
 
 let missing_field_for_type l ty field =
   error l (FieldError ("Type '" ^ ty ^ "' has no field '" ^ field ^ "'"))
@@ -77,7 +77,7 @@ let flow_outside_loop l =
   syntax_error l "'break' and 'continue' can only occur inside a loop"
 
 let bind_error l id =
-  error l (BindError ("cannot assign to '" ^ id ^ "' as it is not mutable"))
+  error l (BindError ("Cannot assign to '" ^ id ^ "' as it is not mutable"))
 
 let implementation_error ?(loc=Loc.fake_loc) s = error loc (RuntimeError s)
 

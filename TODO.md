@@ -1,6 +1,7 @@
 # typed_uscheme
 
 ## TODO
+- check if a mutable is even mutated, if not, throw an error.
 - Lexer tokens should be records so I don't have to keep doing `snd $1`
   and stuff. It should be `$1.l` or `$1.v`, much more readable.
 - Clean up the stupid stuff at the bottom of lexer.mll

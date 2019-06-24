@@ -11,6 +11,11 @@ type ty =
   | TyFold of ((id * (ty list)) option) * (ty Lazy.t) (* for recursive types *)
   | TyUnfold of ty
 
+  (* this really shouldn't exist... It's used only in unify *)
+  (* it is a trait that is not backed by a full record type,
+   * and is only *)
+  | TyTraitCon of (string, ty list) BatHashtbl.t
+
 and tyvar =
   | Link of ty
   | Unbound of id * level * (trait option)
@@ -25,7 +30,7 @@ and kind_fun = (ty list) -> ty
 and kind_trait = level -> ty -> (ty list) -> ty
 
 (* a mutable TyFold *)
-and trait = (string ref) * ((ty list) ref) * (ty Lazy.t)
+and trait = ((string, ty list) BatHashtbl.t) * (ty Lazy.t)
 
 and tyrow = ty (* kind of rows should only be TyRowEmpty or TyRowExtend *)
 

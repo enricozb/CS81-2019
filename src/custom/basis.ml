@@ -447,12 +447,7 @@ let rec string_class = lazy(
     string_unary (fun s -> !Object.make_int (Z.of_int (String.length s)))
   )
   and string_repr = lazy (string_unary
-    (fun x ->
-      let x = BatString.replace_chars
-        (function | '"' -> "\\\"" | c -> String.make 1 c)
-        x
-      in
-      !Object.make_string ("\"" ^ x ^ "\""))
+    (fun x -> !Object.make_string ("\"" ^ (String.escaped x) ^ "\""))
   )
   in
   Object.make_string := (fun s ->
