@@ -15,3 +15,5 @@ val function_class : (unit -> Value.value) ref
 val make_int : (Z.t -> Value.value) ref
 val make_string : (string -> Value.value) ref
 val make_list : (Value.value list -> Value.value) ref
+
+val myth_function : string -> string -> Value.value

@@ -52,7 +52,9 @@ and reduce_ast val_env frames = function
 
   | Ast.Lambda (l, params, body_ast) ->
       let params = List.map fst params in
-      let lambda = Value.Lambda ((params, body_ast), (fun () -> val_env)) in
+      let lambda =
+        Value.Lambda ((params, body_ast), (fun () -> val_env), false)
+      in
       let func_obj = Object.callable_object (lazy lambda) in
       (Value func_obj, val_env, frames)
 
@@ -72,7 +74,9 @@ and reduce_ast val_env frames = function
       let params = List.map fst params in
       let rec closure () = Env.bind name (func_obj ()) val_env
       and func_obj = fun () ->
-        let lambda = Value.Lambda ((params, Ast.Suite(l, suite)), closure) in
+        let lambda =
+          Value.Lambda ((params, Ast.Suite(l, suite)), closure, false)
+        in
         Value.Const (Object.callable_object ~name:(Some name) (lazy lambda))
       in
       (Value Value.None, closure (), frames)
@@ -217,7 +221,17 @@ and eval_call l callable_value param_values val_env frames =
   match Object.get_func_from_callable callable_value with
   | Value.Builtin primop ->
       (Value (primop param_values l), val_env, frames)
-  | Value.Lambda ((params, body_ast), env_fn) ->
+  | Value.Lambda ((params, body_ast), env_fn, magic) ->
+      let env =
+        (* magic means that we will suck in everything from `val_env` to use
+         * in this function's closure. This is usually for functions defined
+         * in basis.ml that aren't Builtins *)
+        if magic then begin
+          Env.right_union val_env (env_fn ())
+        end else
+          env_fn ()
+      in
+      (* if there is no environment, use the current one? *)
       if List.length params <> List.length param_values then
         Error.call_len_error l
           (* TODO : get name of function or something *)
@@ -229,7 +243,7 @@ and eval_call l callable_value param_values val_env frames =
           Env.bind_many
             params
             (List.map (fun v -> Value.Const v) param_values)
-            (env_fn ())
+            env
         in
         (Ast body_ast, val_env', Frame.CallEnv val_env :: frames)
   | _ ->

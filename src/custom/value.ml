@@ -7,7 +7,7 @@ type value =
   | String of string
   | List of value DynArray.t
   | Object of name_value_map
-  | Lambda of lambda * closure
+  | Lambda of lambda * closure * bool
   | Builtin of primop
 
 and name_value_map = (string, value Lazy.t) BatHashtbl.t
@@ -36,12 +36,11 @@ let rec string_of_value = function
       "{" ^ obj_str ^ "}"
 
   (* TODO *)
-  | Lambda (lambda, closure) -> "<lambda>"
+  | Lambda (lambda, closure, magic) -> "<lambda>"
   | Builtin primop -> "<builtin>"
 
 and string_of_list values =
   String.concat ", " (List.map string_of_value values)
-
 
 let truthy l = function
   | Bool b -> b
@@ -49,3 +48,4 @@ let truthy l = function
       Error.type_mismatch_error l
                           ~expected: "Bool"
                           ~provided: (string_of_value value)
+

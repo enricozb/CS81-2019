@@ -32,3 +32,7 @@ let bind_pairs bindings env =
 
 let map f env = StringMap.map f env
 
+let right_union m1 m2 = StringMap.union (fun _ left right -> Some right) m1 m2
+
+let bindings env = StringMap.bindings env
+

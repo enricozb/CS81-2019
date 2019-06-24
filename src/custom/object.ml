@@ -85,3 +85,21 @@ and zero_ary_fun f = callable_object (lazy (
           ~provided: (List.length vals)
   )
 ))
+
+(*
+ * converts simple, non-recursive, myth functions to a callable function
+ * does NOT type check anything.
+ *)
+let myth_function filename source =
+  match Repl.parse_string filename source with
+    | [Ast.Def (l, name, _, params, _, body)] ->
+        let params = List.map fst params in
+        let lambda =
+          Value.Lambda ((params, Ast.Suite(l, body)), (fun () -> Env.empty), true)
+        in
+        callable_object ~name:(Some name) (lazy lambda)
+    | _ ->
+        failwith (
+          "Value.myth_function on something other than a single define. " ^
+          "Specifically:\n" ^ source)
+

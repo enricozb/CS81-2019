@@ -5,7 +5,7 @@ type value =
   | String of string
   | List of value Batteries.DynArray.t
   | Object of name_value_map
-  | Lambda of lambda * closure
+  | Lambda of lambda * closure * bool
   | Builtin of primop
 
 and name_value_map = (string, value Lazy.t) BatHashtbl.t
